@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@source "../**/*.{js,jsx,ts,tsx}";
+@source "../**/*.blade.php";
+@source "../../storage/framework/views/*.php";
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
