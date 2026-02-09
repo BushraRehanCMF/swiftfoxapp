@@ -132,6 +132,12 @@ class WhatsAppService
             $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
             $redirectUri = $configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp';
 
+            Log::info('WhatsApp OAuth Debug', [
+                'code_preview' => substr($code, 0, 30) . '...',
+                'redirect_uri_being_sent' => $redirectUri,
+                'client_id' => $appId,
+            ]);
+
             Log::info('📤 Exchanging authorization code for access token', [
                 'endpoint' => 'https://graph.facebook.com/v22.0/oauth/access_token',
                 'redirect_uri' => $redirectUri,
@@ -143,6 +149,11 @@ class WhatsAppService
                 'code' => $code,
                 'grant_type' => 'authorization_code',
                 'redirect_uri' => $redirectUri,
+            ]);
+
+            Log::info('Token Response', [
+                'status' => $tokenResponse->status(),
+                'body' => $tokenResponse->json(),
             ]);
 
             Log::info('📥 Token exchange response', [
