@@ -174,6 +174,10 @@ const WhatsApp: React.FC = () => {
         })();
       };
 
+      const expectedRedirectUri = `${window.location.origin}/whatsapp`;
+      console.log('Redirect URI for OAuth (page URL):', window.location.href);
+      console.log('Expected redirect URI:', expectedRedirectUri);
+
       // Use FB.login with Embedded Signup config
       // The response comes back in the callback with accessToken
       window.FB?.login(handleFBLoginResponse, {
