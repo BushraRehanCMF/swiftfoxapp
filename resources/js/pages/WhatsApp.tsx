@@ -101,64 +101,6 @@ const WhatsApp: React.FC = () => {
       document.body.appendChild(script);
     });
 
-  const handleEmbeddedSignupEvent = async (event: MessageEvent) => {
-    // Check if this is a Meta Embedded Signup event
-    console.log('📨 Received message event:', event.data);
-
-    if (!event.data || typeof event.data !== 'object') {
-      console.log('⏭️  Skipping non-object message');
-      return;
-    }
-
-    if (event.data.type !== 'WA_EMBEDDED_SIGNUP') {
-      console.log('⏭️  Skipping non-Embedded-Signup message (type:', event.data.type, ')');
-      return;
-    }
-
-    console.log('✅ Embedded Signup event received:', event.data.event);
-
-    if (event.data.event === 'FINISH' || event.data.event === 'COMPLETE') {
-      const inputToken = event.data.data?.input_token ?? event.data.input_token;
-      console.log('🔑 Input token extracted:', inputToken ? `${inputToken.substring(0, 20)}...` : 'NOT FOUND');
-
-      if (!inputToken) {
-        console.error('❌ No input_token in response. Full data:', event.data);
-        setError('Signup completed, but no input token was received. Please try again.');
-        setConnecting(false);
-        return;
-      }
-
-      try {
-        console.log('📤 Sending input_token to /whatsapp/connect...');
-        // Send input_token to backend to exchange for WABA ID + phone number ID
-        const response = await api.post('/whatsapp/connect', { input_token: inputToken });
-        console.log('✅ WhatsApp connection successful:', response.data);
-        setNotice('WhatsApp connected successfully.');
-        await fetchStatus();
-      } catch (err: any) {
-        console.error('❌ Connection failed:', err.response?.data || err.message);
-        setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
-      } finally {
-        setConnecting(false);
-      }
-      return;
-    }
-
-    if (event.data.event === 'CANCEL') {
-      console.log('⚠️  Signup canceled by user');
-      setNotice('Signup was canceled. Please try again if you want to connect WhatsApp.');
-      setConnecting(false);
-      return;
-    }
-
-    if (event.data.event === 'ERROR') {
-      const errorMsg = event.data.data?.error_message || event.data.error_message || 'Embedded Signup failed.';
-      console.error('❌ Embedded Signup error:', event.data);
-      setError(errorMsg);
-      setConnecting(false);
-    }
-  };
-
   const startEmbeddedSignup = async () => {
     setError('');
     setNotice('');
@@ -175,40 +117,61 @@ const WhatsApp: React.FC = () => {
       await ensureFacebookSdk(currentConfig.app_id);
 
       // Handle FB.login response - this is where the authorization comes back
-      const handleFBLoginResponse = async (authResponse: any) => {
-        console.log('📥 FB.login callback received:', authResponse);
+      const handleFBLoginResponse = (response: any) => {
+        // Use IIFE to handle async code
+        (async () => {
+          console.log('📥 FB.login callback received');
+          console.log('Full response:', response);
+          console.log('Response keys:', Object.keys(response || {}));
 
-        // Check if login was successful
-        if (!authResponse || !authResponse.accessToken) {
-          console.error('❌ No access token in FB.login response');
-          setError('Login failed. No access token received.');
-          setConnecting(false);
-          return;
-        }
+          // The response structure for Embedded Signup is: { authResponse: {...}, status: 'connected' }
+          const authData = response?.authResponse;
+          console.log('authResponse:', authData);
+          console.log('authResponse keys:', Object.keys(authData || {}));
 
-        console.log(
-          '✅ Access token received:',
-          authResponse.accessToken.substring(0, 20) + '...'
-        );
+          // Check for input_token (JWT from Embedded Signup modal)
+          const inputToken = authData?.input_token;
+          // OR check for authorization code
+          const code = authData?.code;
 
-        try {
-          // Send the access token to backend to exchange for WABA info
-          console.log('📤 Sending access token to /whatsapp/connect...');
-          const response = await api.post('/whatsapp/connect', {
-            access_token: authResponse.accessToken,
-          });
+          console.log('input_token:', inputToken ? inputToken.substring(0, 30) + '...' : 'NOT FOUND');
+          console.log('authorization code:', code ? code.substring(0, 30) + '...' : 'NOT FOUND');
 
-          console.log('✅ WhatsApp connection successful:', response.data);
-          setNotice('WhatsApp connected successfully!');
-          await fetchStatus();
-        } catch (err: any) {
-          console.error('❌ Connection failed:', err.response?.data || err.message);
-          setError(
-            err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
-          );
-        } finally {
-          setConnecting(false);
-        }
+          const token = inputToken || code;
+
+          if (!token) {
+            console.error('❌ No authorization data in FB.login response', {
+              has_response: !!response,
+              has_authResponse: !!authData,
+              authResponse_keys: Object.keys(authData || {}),
+            });
+            setError('Login failed. No authorization token received. Check console for details.');
+            setConnecting(false);
+            return;
+          }
+
+          console.log('✅ Authorization token received:', token.substring(0, 30) + '...');
+
+          try {
+            // Send the token to backend to exchange for WABA info
+            console.log('📤 Sending authorization token to /whatsapp/connect...');
+            const connectResponse = await api.post('/whatsapp/connect', {
+              code: token,
+              is_input_token: !!inputToken,
+            });
+
+            console.log('✅ WhatsApp connection successful:', connectResponse.data);
+            setNotice('WhatsApp connected successfully!');
+            await fetchStatus();
+          } catch (err: any) {
+            console.error('❌ Connection failed:', err.response?.data || err.message);
+            setError(
+              err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
+            );
+          } finally {
+            setConnecting(false);
+          }
+        })();
       };
 
       // Use FB.login with Embedded Signup config

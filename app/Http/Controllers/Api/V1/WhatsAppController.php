@@ -46,24 +46,29 @@ class WhatsAppController extends Controller
 
     /**
      * Store WhatsApp connection from Meta Embedded Signup.
-     * Exchanges access_token from FB.login for WABA ID and phone number ID.
+     * Exchanges authorization code or input_token for WABA info.
      */
     public function connect(Request $request): JsonResponse
     {
         \Log::info('🔗 WhatsApp connect endpoint called', [
             'user_id' => $request->user()->id,
             'account_id' => $request->user()->account->id,
-            'has_access_token' => (bool) $request->input('access_token'),
+            'has_code' => (bool) $request->input('code'),
+            'is_input_token' => (bool) $request->input('is_input_token'),
         ]);
 
         $validated = $request->validate([
-            'access_token' => ['required', 'string'],
+            'code' => ['required', 'string'],
+            'is_input_token' => ['sometimes', 'boolean'],
         ]);
 
         $account = $request->user()->account;
+        $code = $validated['code'];
+        $isInputToken = $validated['is_input_token'] ?? false;
 
-        \Log::info('✅ Access token validated', [
-            'token_preview' => substr($validated['access_token'], 0, 20) . '...',
+        \Log::info('✅ Request validated', [
+            'token_type' => $isInputToken ? 'input_token (JWT)' : 'authorization_code',
+            'code_preview' => substr($code, 0, 30) . '...',
         ]);
 
         // Check if already connected
@@ -81,11 +86,11 @@ class WhatsAppController extends Controller
         }
 
         try {
-            \Log::info('🔄 Starting token exchange with WhatsAppService');
-            // Exchange access_token for WABA information
-            $wabaData = $this->whatsAppService->exchangeAccessTokenForWabaInfo($validated['access_token']);
+            \Log::info('🔄 Starting authorization exchange with WhatsAppService');
+            // Exchange authorization code/input_token for WABA information
+            $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo($code, $isInputToken);
 
-            \Log::info('✅ Token exchange successful, creating WhatsappConnection', [
+            \Log::info('✅ Authorization exchange successful, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],
                 'phone_number' => $wabaData['phone_number'],
             ]);
@@ -98,6 +103,37 @@ class WhatsAppController extends Controller
                 'phone_number' => $wabaData['phone_number'],
                 'status' => WhatsappConnection::STATUS_ACTIVE,
             ]);
+
+            \Log::info('✅ WhatsappConnection record created', [
+                'connection_id' => $connection->id,
+                'account_id' => $account->id,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'connected' => true,
+                    'phone_number' => $connection->phone_number,
+                    'phone_number_id' => $connection->phone_number_id,
+                    'waba_id' => $connection->waba_id,
+                    'status' => $connection->status,
+                    'connected_at' => $connection->created_at,
+                ],
+                'message' => 'WhatsApp connected successfully.',
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('❌ WhatsApp connection failed', [
+                'account_id' => $account->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => [
+                    'code' => 'EXCHANGE_FAILED',
+                    'message' => 'Unable to connect WhatsApp: ' . $e->getMessage(),
+                ],
+            ], 400);
+        }
+    }
 
             \Log::info('✅ WhatsappConnection record created', [
                 'connection_id' => $connection->id,
