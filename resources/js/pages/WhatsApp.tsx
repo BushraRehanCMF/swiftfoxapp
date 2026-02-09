@@ -101,22 +101,60 @@ const WhatsApp: React.FC = () => {
       document.body.appendChild(script);
     });
 
-  const handleSignupResponseCode = async (code: string) => {
-    setError('');
-    setNotice('');
-    setConnecting(true);
+  const handleEmbeddedSignupEvent = async (event: MessageEvent) => {
+    // Check if this is a Meta Embedded Signup event
+    console.log('📨 Received message event:', event.data);
 
-    try {
-      // Send code to backend to exchange for WABA ID + phone number ID
-      await api.post('/whatsapp/connect', { code });
-      setNotice('WhatsApp connected successfully.');
-      await fetchStatus();
+    if (!event.data || typeof event.data !== 'object') {
+      console.log('⏭️  Skipping non-object message');
+      return;
+    }
 
-      // Clean up the URL (remove code parameter)
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
-    } finally {
+    if (event.data.type !== 'WA_EMBEDDED_SIGNUP') {
+      console.log('⏭️  Skipping non-Embedded-Signup message (type:', event.data.type, ')');
+      return;
+    }
+
+    console.log('✅ Embedded Signup event received:', event.data.event);
+
+    if (event.data.event === 'FINISH' || event.data.event === 'COMPLETE') {
+      const inputToken = event.data.data?.input_token ?? event.data.input_token;
+      console.log('🔑 Input token extracted:', inputToken ? `${inputToken.substring(0, 20)}...` : 'NOT FOUND');
+
+      if (!inputToken) {
+        console.error('❌ No input_token in response. Full data:', event.data);
+        setError('Signup completed, but no input token was received. Please try again.');
+        setConnecting(false);
+        return;
+      }
+
+      try {
+        console.log('📤 Sending input_token to /whatsapp/connect...');
+        // Send input_token to backend to exchange for WABA ID + phone number ID
+        const response = await api.post('/whatsapp/connect', { input_token: inputToken });
+        console.log('✅ WhatsApp connection successful:', response.data);
+        setNotice('WhatsApp connected successfully.');
+        await fetchStatus();
+      } catch (err: any) {
+        console.error('❌ Connection failed:', err.response?.data || err.message);
+        setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
+      } finally {
+        setConnecting(false);
+      }
+      return;
+    }
+
+    if (event.data.event === 'CANCEL') {
+      console.log('⚠️  Signup canceled by user');
+      setNotice('Signup was canceled. Please try again if you want to connect WhatsApp.');
+      setConnecting(false);
+      return;
+    }
+
+    if (event.data.event === 'ERROR') {
+      const errorMsg = event.data.data?.error_message || event.data.error_message || 'Embedded Signup failed.';
+      console.error('❌ Embedded Signup error:', event.data);
+      setError(errorMsg);
       setConnecting(false);
     }
   };
@@ -135,20 +173,24 @@ const WhatsApp: React.FC = () => {
 
     try {
       await ensureFacebookSdk(currentConfig.app_id);
-      const redirectUri = `${window.location.origin}/whatsapp`;
 
+      // Use FB.login with Embedded Signup config
+      // The response will come back via postMessage event, not redirect
       window.FB?.login(
-        () => {
-          setNotice('Continue the Embedded Signup flow in the popup window.');
+        (response: any) => {
+          // Response from FB.login for embedded signup comes via postMessage, not here
+          console.log('FB.login response:', response);
         },
         {
           config_id: currentConfig.config_id,
           response_type: 'code',
           override_default_response_type: true,
-          redirect_uri: redirectUri,
-          scope: 'whatsapp_business_management,whatsapp_business_messaging',
+          scope: 'whatsapp_business_messaging,business_management',
+          // For embedded signup, Meta will call postMessage instead of redirecting
         }
       );
+
+      setNotice('Completing signup in the popup window...');
     } catch (err: any) {
       setError(err.message || 'Unable to start Embedded Signup.');
       setConnecting(false);
@@ -170,15 +212,13 @@ const WhatsApp: React.FC = () => {
   useEffect(() => {
     fetchStatus();
     fetchConfig();
-
-    // Check if returning from Meta Embedded Signup with response code
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-
-    if (code) {
-      handleSignupResponseCode(code);
-    }
   }, []);
+
+  useEffect(() => {
+    // Listen for Meta Embedded Signup postMessage events
+    window.addEventListener('message', handleEmbeddedSignupEvent);
+    return () => window.removeEventListener('message', handleEmbeddedSignupEvent);
+  }, [config]);
 
   return (
     <div className="space-y-6">
