@@ -46,14 +46,12 @@ class WhatsAppController extends Controller
 
     /**
      * Store WhatsApp connection from Meta Embedded Signup.
-     * Called after the frontend completes the Meta Embedded Signup flow.
+     * Exchanges authorization code for WABA ID and phone number ID.
      */
     public function connect(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'waba_id' => ['required', 'string'],
-            'phone_number_id' => ['required', 'string'],
-            'phone_number' => ['required', 'string'],
+            'code' => ['required', 'string'],
         ]);
 
         $account = $request->user()->account;
@@ -68,26 +66,38 @@ class WhatsAppController extends Controller
             ], 409);
         }
 
-        // Create the connection
-        $connection = WhatsappConnection::create([
-            'account_id' => $account->id,
-            'waba_id' => $validated['waba_id'],
-            'phone_number_id' => $validated['phone_number_id'],
-            'phone_number' => $validated['phone_number'],
-            'status' => WhatsappConnection::STATUS_ACTIVE,
-        ]);
+        try {
+            // Exchange code for access token and WABA information
+            $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo($validated['code']);
 
-        return response()->json([
-            'data' => [
-                'connected' => true,
-                'phone_number' => $connection->phone_number,
-                'phone_number_id' => $connection->phone_number_id,
-                'waba_id' => $connection->waba_id,
-                'status' => $connection->status,
-                'connected_at' => $connection->created_at,
-            ],
-            'message' => 'WhatsApp connected successfully.',
-        ], 201);
+            // Create the connection
+            $connection = WhatsappConnection::create([
+                'account_id' => $account->id,
+                'waba_id' => $wabaData['waba_id'],
+                'phone_number_id' => $wabaData['phone_number_id'],
+                'phone_number' => $wabaData['phone_number'],
+                'status' => WhatsappConnection::STATUS_ACTIVE,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'connected' => true,
+                    'phone_number' => $connection->phone_number,
+                    'phone_number_id' => $connection->phone_number_id,
+                    'waba_id' => $connection->waba_id,
+                    'status' => $connection->status,
+                    'connected_at' => $connection->created_at,
+                ],
+                'message' => 'WhatsApp connected successfully.',
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => [
+                    'code' => 'EXCHANGE_FAILED',
+                    'message' => 'Unable to exchange code for WhatsApp connection: ' . $e->getMessage(),
+                ],
+            ], 400);
+        }
     }
 
     /**

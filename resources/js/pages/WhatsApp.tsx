@@ -101,56 +101,22 @@ const WhatsApp: React.FC = () => {
       document.body.appendChild(script);
     });
 
-  const parseSignupPayload = (payload: any) => {
-    const data = payload?.data ?? payload;
-    const wabaId = data?.waba_id ?? data?.wabaId ?? data?.wabaID;
-    const phoneNumberId = data?.phone_number_id ?? data?.phoneNumberId;
-    const phoneNumber = data?.phone_number ?? data?.phoneNumber;
+  const handleSignupResponseCode = async (code: string) => {
+    setError('');
+    setNotice('');
+    setConnecting(true);
 
-    if (!wabaId || !phoneNumberId || !phoneNumber) {
-      return null;
-    }
+    try {
+      // Send code to backend to exchange for WABA ID + phone number ID
+      await api.post('/whatsapp/connect', { code });
+      setNotice('WhatsApp connected successfully.');
+      await fetchStatus();
 
-    return {
-      waba_id: String(wabaId),
-      phone_number_id: String(phoneNumberId),
-      phone_number: String(phoneNumber),
-    };
-  };
-
-  const handleEmbeddedEvent = async (event: MessageEvent) => {
-    const payload = event.data;
-    if (!payload || typeof payload !== 'object') return;
-    if (payload.type !== 'WA_EMBEDDED_SIGNUP') return;
-
-    if (payload.event === 'FINISH' || payload.event === 'COMPLETE') {
-      const signupData = parseSignupPayload(payload);
-      if (!signupData) {
-        setError('Signup completed, but the connection details were missing.');
-        setConnecting(false);
-        return;
-      }
-
-      try {
-        await api.post('/whatsapp/connect', signupData);
-        setNotice('WhatsApp connected successfully.');
-        await fetchStatus();
-      } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Failed to save WhatsApp connection.');
-      } finally {
-        setConnecting(false);
-      }
-      return;
-    }
-
-    if (payload.event === 'CANCEL') {
-      setNotice('Signup was canceled before completion.');
-      setConnecting(false);
-      return;
-    }
-
-    if (payload.event === 'ERROR') {
-      setError(payload.message || 'Embedded Signup failed.');
+      // Clean up the URL (remove code parameter)
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
+    } finally {
       setConnecting(false);
     }
   };
@@ -204,12 +170,15 @@ const WhatsApp: React.FC = () => {
   useEffect(() => {
     fetchStatus();
     fetchConfig();
-  }, []);
 
-  useEffect(() => {
-    window.addEventListener('message', handleEmbeddedEvent);
-    return () => window.removeEventListener('message', handleEmbeddedEvent);
-  }, [config]);
+    // Check if returning from Meta Embedded Signup with response code
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    if (code) {
+      handleSignupResponseCode(code);
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
