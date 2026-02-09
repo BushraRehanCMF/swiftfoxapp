@@ -46,24 +46,24 @@ class WhatsAppController extends Controller
 
     /**
      * Store WhatsApp connection from Meta Embedded Signup.
-     * Exchanges input_token for WABA ID and phone number ID.
+     * Exchanges access_token from FB.login for WABA ID and phone number ID.
      */
     public function connect(Request $request): JsonResponse
     {
         \Log::info('🔗 WhatsApp connect endpoint called', [
             'user_id' => $request->user()->id,
             'account_id' => $request->user()->account->id,
-            'has_input_token' => (bool) $request->input('input_token'),
+            'has_access_token' => (bool) $request->input('access_token'),
         ]);
 
         $validated = $request->validate([
-            'input_token' => ['required', 'string'],
+            'access_token' => ['required', 'string'],
         ]);
 
         $account = $request->user()->account;
 
-        \Log::info('✅ Input token validated', [
-            'token_preview' => substr($validated['input_token'], 0, 20) . '...',
+        \Log::info('✅ Access token validated', [
+            'token_preview' => substr($validated['access_token'], 0, 20) . '...',
         ]);
 
         // Check if already connected
@@ -82,8 +82,8 @@ class WhatsAppController extends Controller
 
         try {
             \Log::info('🔄 Starting token exchange with WhatsAppService');
-            // Exchange input_token for WABA information
-            $wabaData = $this->whatsAppService->exchangeInputTokenForWabaInfo($validated['input_token']);
+            // Exchange access_token for WABA information
+            $wabaData = $this->whatsAppService->exchangeAccessTokenForWabaInfo($validated['access_token']);
 
             \Log::info('✅ Token exchange successful, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],

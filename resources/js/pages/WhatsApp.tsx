@@ -174,21 +174,51 @@ const WhatsApp: React.FC = () => {
     try {
       await ensureFacebookSdk(currentConfig.app_id);
 
-      // Use FB.login with Embedded Signup config
-      // The response will come back via postMessage event, not redirect
-      window.FB?.login(
-        (response: any) => {
-          // Response from FB.login for embedded signup comes via postMessage, not here
-          console.log('FB.login response:', response);
-        },
-        {
-          config_id: currentConfig.config_id,
-          response_type: 'code',
-          override_default_response_type: true,
-          scope: 'whatsapp_business_messaging,business_management',
-          // For embedded signup, Meta will call postMessage instead of redirecting
+      // Handle FB.login response - this is where the authorization comes back
+      const handleFBLoginResponse = async (authResponse: any) => {
+        console.log('📥 FB.login callback received:', authResponse);
+
+        // Check if login was successful
+        if (!authResponse || !authResponse.accessToken) {
+          console.error('❌ No access token in FB.login response');
+          setError('Login failed. No access token received.');
+          setConnecting(false);
+          return;
         }
-      );
+
+        console.log(
+          '✅ Access token received:',
+          authResponse.accessToken.substring(0, 20) + '...'
+        );
+
+        try {
+          // Send the access token to backend to exchange for WABA info
+          console.log('📤 Sending access token to /whatsapp/connect...');
+          const response = await api.post('/whatsapp/connect', {
+            access_token: authResponse.accessToken,
+          });
+
+          console.log('✅ WhatsApp connection successful:', response.data);
+          setNotice('WhatsApp connected successfully!');
+          await fetchStatus();
+        } catch (err: any) {
+          console.error('❌ Connection failed:', err.response?.data || err.message);
+          setError(
+            err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
+          );
+        } finally {
+          setConnecting(false);
+        }
+      };
+
+      // Use FB.login with Embedded Signup config
+      // The response comes back in the callback with accessToken
+      window.FB?.login(handleFBLoginResponse, {
+        config_id: currentConfig.config_id,
+        response_type: 'code',
+        override_default_response_type: true,
+        scope: 'whatsapp_business_messaging,business_management',
+      });
 
       setNotice('Completing signup in the popup window...');
     } catch (err: any) {
@@ -213,12 +243,6 @@ const WhatsApp: React.FC = () => {
     fetchStatus();
     fetchConfig();
   }, []);
-
-  useEffect(() => {
-    // Listen for Meta Embedded Signup postMessage events
-    window.addEventListener('message', handleEmbeddedSignupEvent);
-    return () => window.removeEventListener('message', handleEmbeddedSignupEvent);
-  }, [config]);
 
   return (
     <div className="space-y-6">
