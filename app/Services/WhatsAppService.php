@@ -113,9 +113,10 @@ class WhatsAppService
         }
 
         // Step 1: Exchange code for access token
+        // IMPORTANT: redirect_uri must match exactly what was used in FB.login() on the frontend
         $redirectUri = config('app.url') . '/whatsapp';
 
-        $tokenResponse = Http::post("https://graph.facebook.com/v22.0/oauth/access_token", [
+        $tokenResponse = Http::asForm()->post("https://graph.facebook.com/v22.0/oauth/access_token", [
             'client_id' => $appId,
             'client_secret' => $appSecret,
             'code' => $code,
@@ -126,9 +127,11 @@ class WhatsAppService
         if (!$tokenResponse->successful()) {
             Log::error('Meta OAuth token exchange failed', [
                 'status' => $tokenResponse->status(),
-                'body' => $tokenResponse->json(),
+                'redirect_uri_sent' => $redirectUri,
+                'code_used' => substr($code, 0, 10) . '...',
+                'response' => $tokenResponse->json(),
             ]);
-            throw new \Exception('Failed to exchange code for access token.');
+            throw new \Exception('Failed to exchange code for access token: ' . json_encode($tokenResponse->json()['error'] ?? 'Unknown error'));
         }
 
         $tokenData = $tokenResponse->json();
