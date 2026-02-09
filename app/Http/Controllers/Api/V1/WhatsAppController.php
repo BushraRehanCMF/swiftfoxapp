@@ -135,37 +135,6 @@ class WhatsAppController extends Controller
         }
     }
 
-            \Log::info('✅ WhatsappConnection record created', [
-                'connection_id' => $connection->id,
-                'account_id' => $account->id,
-            ]);
-
-            return response()->json([
-                'data' => [
-                    'connected' => true,
-                    'phone_number' => $connection->phone_number,
-                    'phone_number_id' => $connection->phone_number_id,
-                    'waba_id' => $connection->waba_id,
-                    'status' => $connection->status,
-                    'connected_at' => $connection->created_at,
-                ],
-                'message' => 'WhatsApp connected successfully.',
-            ], 201);
-        } catch (\Exception $e) {
-            \Log::error('❌ WhatsApp connection failed', [
-                'account_id' => $account->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'error' => [
-                    'code' => 'EXCHANGE_FAILED',
-                    'message' => 'Unable to connect WhatsApp: ' . $e->getMessage(),
-                ],
-            ], 400);
-        }
-    }
-
     /**
      * Disconnect WhatsApp.
      */
