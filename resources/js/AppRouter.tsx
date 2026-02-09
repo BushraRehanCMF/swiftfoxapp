@@ -7,11 +7,11 @@ import ResetPassword from './pages/ResetPassword';
 import WhatsApp from './pages/WhatsApp';
 import Labels from './pages/Labels';
 import Contacts from './pages/Contacts';
+import Automations from './pages/Automations';
 import { useAuth } from './stores/auth';
 
 // Placeholder pages
 const Inbox = () => <div className="text-xl">Inbox</div>;
-const Automations = () => <div className="text-xl">Automations</div>;
 const BusinessHours = () => <div className="text-xl">Business Hours</div>;
 const Usage = () => <div className="text-xl">Usage & Trial Status</div>;
 const Team = () => <div className="text-xl">Team Management</div>;
