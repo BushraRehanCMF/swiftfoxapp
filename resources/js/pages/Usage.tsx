@@ -1,0 +1,130 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import api from '../services/api';
+
+type AccountUsage = {
+  conversations_used: number;
+  conversations_limit: number;
+  conversations_remaining: number;
+};
+
+type AccountTrial = {
+  is_on_trial: boolean;
+  is_expired: boolean;
+  ends_at?: string | null;
+  days_remaining: number;
+};
+
+type Account = {
+  id: string;
+  name: string;
+  subscription_status: string;
+  trial: AccountTrial;
+  usage: AccountUsage;
+  whatsapp_connected: boolean;
+  can_send_messages: boolean;
+};
+
+const Usage: React.FC = () => {
+  const [account, setAccount] = useState<Account | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const usagePercent = useMemo(() => {
+    if (!account) return 0;
+    if (account.usage.conversations_limit <= 0) return 0;
+    return Math.min(100, Math.round((account.usage.conversations_used / account.usage.conversations_limit) * 100));
+  }, [account]);
+
+  useEffect(() => {
+    const fetchAccount = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data } = await api.get('/auth/user');
+        setAccount(data.data.account || null);
+      } catch (err: any) {
+        setError(err.response?.data?.error?.message || 'Unable to load usage data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAccount();
+  }, []);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return 'Unknown';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Unknown';
+    return parsed.toLocaleDateString();
+  };
+
+  if (loading) {
+    return <div className="text-sm text-gray-500">Loading usage...</div>;
+  }
+
+  if (error) {
+    return <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
+  }
+
+  if (!account) {
+    return <div className="text-sm text-gray-500">No account data available.</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Usage & Trial</h1>
+        <p className="text-sm text-gray-600 mt-1">Track trial status and conversation usage.</p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="text-xs uppercase tracking-wide text-gray-400">Trial status</div>
+          <div className="mt-2 text-lg font-semibold text-gray-900">
+            {account.trial.is_on_trial ? 'On trial' : account.subscription_status}
+          </div>
+          <div className="mt-2 text-sm text-gray-600">
+            {account.trial.is_on_trial
+              ? `${account.trial.days_remaining} days remaining`
+              : account.trial.is_expired
+                ? 'Trial expired'
+                : 'Subscription active'}
+          </div>
+          <div className="mt-4 text-xs text-gray-500">Ends at: {formatDate(account.trial.ends_at)}</div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="text-xs uppercase tracking-wide text-gray-400">Conversations</div>
+          <div className="mt-2 flex items-end justify-between">
+            <div className="text-2xl font-semibold text-gray-900">{account.usage.conversations_used}</div>
+            <div className="text-sm text-gray-500">/ {account.usage.conversations_limit}</div>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-gray-100">
+            <div className="h-2 rounded-full bg-emerald-600" style={{ width: `${usagePercent}%` }} />
+          </div>
+          <div className="mt-2 text-xs text-gray-500">{account.usage.conversations_remaining} remaining</div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="text-xs uppercase tracking-wide text-gray-400">Messaging status</div>
+          <div className="mt-2 text-lg font-semibold text-gray-900">
+            {account.can_send_messages ? 'Sending enabled' : 'Sending disabled'}
+          </div>
+          <div className="mt-2 text-sm text-gray-600">
+            {account.whatsapp_connected ? 'WhatsApp connected' : 'WhatsApp not connected'}
+          </div>
+          {!account.can_send_messages && (
+            <div className="mt-4 text-xs text-amber-600">Upgrade required to resume sending.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-700">
+        Need more conversations? Upgrade your plan to continue using WhatsApp features after the trial.
+      </div>
+    </div>
+  );
+};
+
+export default Usage;
