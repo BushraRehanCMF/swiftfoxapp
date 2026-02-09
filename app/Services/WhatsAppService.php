@@ -129,17 +129,20 @@ class WhatsAppService
 
         // If it's an authorization code, exchange it for an access token first
         if (!$isInputToken) {
+            $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
+            $redirectUri = $configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp';
+
             Log::info('📤 Exchanging authorization code for access token', [
-                'endpoint' => 'https://graph.instagram.com/v22.0/oauth/access_token',
-                'redirect_uri' => config('app.url') . '/whatsapp',
+                'endpoint' => 'https://graph.facebook.com/v22.0/oauth/access_token',
+                'redirect_uri' => $redirectUri,
             ]);
 
-            $tokenResponse = Http::asForm()->post('https://graph.instagram.com/v22.0/oauth/access_token', [
+            $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', [
                 'client_id' => $appId,
                 'client_secret' => $appSecret,
                 'code' => $code,
                 'grant_type' => 'authorization_code',
-                'redirect_uri' => config('app.url') . '/whatsapp',
+                'redirect_uri' => $redirectUri,
             ]);
 
             Log::info('📥 Token exchange response', [

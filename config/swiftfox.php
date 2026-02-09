@@ -32,6 +32,7 @@ return [
         'app_id' => env('WHATSAPP_APP_ID'),
         'app_secret' => env('WHATSAPP_APP_SECRET'),
         'config_id' => env('WHATSAPP_CONFIG_ID'), // Embedded Signup Configuration ID
+        'redirect_uri' => env('WHATSAPP_REDIRECT_URI'),
         'webhook_verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
     ],
 
