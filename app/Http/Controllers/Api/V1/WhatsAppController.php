@@ -58,10 +58,10 @@ class WhatsAppController extends Controller
         ]);
 
         $validated = $request->validate([
-            'code' => ['sometimes', 'string'],
-            'access_token' => ['sometimes', 'string'],
+            'code' => ['sometimes', 'nullable', 'string'],
+            'access_token' => ['sometimes', 'nullable', 'string'],
             'is_input_token' => ['sometimes', 'boolean'],
-            'redirect_uri' => ['sometimes', 'string'],
+            'redirect_uri' => ['sometimes', 'nullable', 'string'],
         ]);
 
         if (empty($validated['code']) && empty($validated['access_token'])) {
