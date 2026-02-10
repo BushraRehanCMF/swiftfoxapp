@@ -29,14 +29,17 @@ class WhatsAppTestController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string'],
             'is_input_token' => ['sometimes', 'boolean'],
+            'redirect_uri' => ['sometimes', 'string'],
         ]);
 
         $isInputToken = $validated['is_input_token'] ?? false;
+        $redirectUri = $validated['redirect_uri'] ?? null;
 
         try {
             $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo(
                 $validated['code'],
-                $isInputToken
+                $isInputToken,
+                $redirectUri
             );
 
             return view('whatsapp-test', [

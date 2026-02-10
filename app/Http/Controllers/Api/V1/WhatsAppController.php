@@ -60,15 +60,18 @@ class WhatsAppController extends Controller
         $validated = $request->validate([
             'code' => ['required', 'string'],
             'is_input_token' => ['sometimes', 'boolean'],
+            'redirect_uri' => ['sometimes', 'string'],
         ]);
 
         $account = $request->user()->account;
         $code = $validated['code'];
         $isInputToken = $validated['is_input_token'] ?? false;
+        $redirectUri = $validated['redirect_uri'] ?? null;
 
         \Log::info('✅ Request validated', [
             'token_type' => $isInputToken ? 'input_token (JWT)' : 'authorization_code',
             'code_preview' => substr($code, 0, 30) . '...',
+            'redirect_uri' => $redirectUri,
         ]);
 
         // Check if already connected
@@ -88,7 +91,11 @@ class WhatsAppController extends Controller
         try {
             \Log::info('🔄 Starting authorization exchange with WhatsAppService');
             // Exchange authorization code/input_token for WABA information
-            $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo($code, $isInputToken);
+            $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo(
+                $code,
+                $isInputToken,
+                $redirectUri
+            );
 
             \Log::info('✅ Authorization exchange successful, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],

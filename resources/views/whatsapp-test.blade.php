@@ -60,6 +60,7 @@
         @csrf
         <input type="hidden" name="code" id="oauth-code" value="" />
         <input type="hidden" name="is_input_token" id="is-input-token" value="0" />
+        <input type="hidden" name="redirect_uri" id="redirect-uri" value="" />
       </form>
 
       <div class="row box">
@@ -108,8 +109,10 @@
 
         try {
           await loadFacebookSdk();
+          const dialogRedirectUri = window.location.href.split('#')[0];
           log('SDK loaded');
           log('Page URL: ' + window.location.href);
+          log('Redirect URI sent to server: ' + dialogRedirectUri);
 
           window.FB.login((response) => {
             log('FB.login response received');
@@ -129,6 +132,7 @@
             const token = inputToken || code;
             document.getElementById('oauth-code').value = token;
             document.getElementById('is-input-token').value = inputToken ? '1' : '0';
+            document.getElementById('redirect-uri').value = dialogRedirectUri;
 
             log('Submitting to server...');
             document.getElementById('connect-form').submit();

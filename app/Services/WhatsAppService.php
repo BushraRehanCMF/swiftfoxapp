@@ -107,7 +107,11 @@ class WhatsAppService
      * @return array{waba_id: string, phone_number_id: string, phone_number: string}
      * @throws \Exception
      */
-    public function exchangeCodeForWabaInfo(string $code, bool $isInputToken = false): array
+    public function exchangeCodeForWabaInfo(
+        string $code,
+        bool $isInputToken = false,
+        ?string $redirectUriOverride = null
+    ): array
     {
         $appId = config('swiftfox.whatsapp.app_id');
         $appSecret = config('swiftfox.whatsapp.app_secret');
@@ -130,7 +134,8 @@ class WhatsAppService
         // If it's an authorization code, exchange it for an access token first
         if (!$isInputToken) {
             $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
-            $redirectUri = $configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp';
+            $redirectUri = $redirectUriOverride
+                ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
 
             Log::info('WhatsApp OAuth Debug', [
                 'code_preview' => substr($code, 0, 30) . '...',
