@@ -59,6 +59,7 @@
       <form id="connect-form" method="POST" action="{{ route('whatsapp-test.connect') }}" style="display:none;">
         @csrf
         <input type="hidden" name="code" id="oauth-code" value="" />
+        <input type="hidden" name="access_token" id="access-token" value="" />
         <input type="hidden" name="is_input_token" id="is-input-token" value="0" />
         <input type="hidden" name="redirect_uri" id="redirect-uri" value="" />
       </form>
@@ -119,18 +120,20 @@
             const authData = response && response.authResponse ? response.authResponse : null;
             const inputToken = authData ? authData.input_token : null;
             const code = authData ? authData.code : null;
+            const accessToken = authData ? authData.accessToken : null;
 
+            log('access_token present: ' + (!!accessToken));
             log('input_token present: ' + (!!inputToken));
             log('code present: ' + (!!code));
 
-            if (!inputToken && !code) {
+            if (!accessToken && !inputToken && !code) {
               log('No authorization token received.');
               connectBtn.disabled = false;
               return;
             }
 
-            const token = inputToken || code;
-            document.getElementById('oauth-code').value = token;
+            document.getElementById('access-token').value = accessToken || '';
+            document.getElementById('oauth-code').value = accessToken ? '' : (inputToken || code || '');
             document.getElementById('is-input-token').value = inputToken ? '1' : '0';
             document.getElementById('redirect-uri').value = dialogRedirectUri;
 

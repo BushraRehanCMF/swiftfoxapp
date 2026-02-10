@@ -129,17 +129,18 @@ const WhatsApp: React.FC = () => {
           console.log('authResponse:', authData);
           console.log('authResponse keys:', Object.keys(authData || {}));
 
+          // Prefer access token flow for Embedded Signup
+          const accessToken = authData?.accessToken;
           // Check for input_token (JWT from Embedded Signup modal)
           const inputToken = authData?.input_token;
           // OR check for authorization code
           const code = authData?.code;
 
+          console.log('access_token:', accessToken ? accessToken.substring(0, 30) + '...' : 'NOT FOUND');
           console.log('input_token:', inputToken ? inputToken.substring(0, 30) + '...' : 'NOT FOUND');
           console.log('authorization code:', code ? code.substring(0, 30) + '...' : 'NOT FOUND');
 
-          const token = inputToken || code;
-
-          if (!token) {
+          if (!accessToken && !inputToken && !code) {
             console.error('❌ No authorization data in FB.login response', {
               has_response: !!response,
               has_authResponse: !!authData,
@@ -150,13 +151,14 @@ const WhatsApp: React.FC = () => {
             return;
           }
 
-          console.log('✅ Authorization token received:', token.substring(0, 30) + '...');
+          console.log('✅ Authorization data received');
 
           try {
             // Send the token to backend to exchange for WABA info
-            console.log('📤 Sending authorization token to /whatsapp/connect...');
+            console.log('📤 Sending authorization data to /whatsapp/connect...');
             const connectResponse = await api.post('/whatsapp/connect', {
-              code: token,
+              access_token: accessToken,
+              code: accessToken ? undefined : (inputToken || code),
               is_input_token: !!inputToken,
             });
 

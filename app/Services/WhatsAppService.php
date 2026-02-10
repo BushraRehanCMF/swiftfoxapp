@@ -194,6 +194,32 @@ class WhatsAppService
             ]);
         }
 
+        return $this->fetchWabaInfoWithAccessToken($accessToken);
+    }
+
+    /**
+     * Exchange a user access token for WABA info.
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string}
+     * @throws \Exception
+     */
+    public function exchangeAccessTokenForWabaInfo(string $accessToken): array
+    {
+        Log::info('🔄 Using access token directly for WABA lookup', [
+            'token_preview' => substr($accessToken, 0, 30) . '...',
+        ]);
+
+        return $this->fetchWabaInfoWithAccessToken($accessToken);
+    }
+
+    /**
+     * Fetch WABA and phone number data using an access token.
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string}
+     * @throws \Exception
+     */
+    protected function fetchWabaInfoWithAccessToken(string $accessToken): array
+    {
         // Step 2: Get WABA info with the access token
         Log::info('📤 Fetching WABA info from Meta');
         $meResponse = Http::withToken($accessToken)->get(
