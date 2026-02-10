@@ -11,10 +11,8 @@ import Automations from './pages/Automations';
 import Usage from './pages/Usage';
 import BusinessHours from './pages/BusinessHours';
 import Team from './pages/Team';
+import Inbox from './pages/Inbox';
 import { useAuth } from './stores/auth';
-
-// Placeholder pages
-const Inbox = () => <div className="text-xl">Inbox</div>;
 
 const Protected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
