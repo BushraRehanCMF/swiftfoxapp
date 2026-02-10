@@ -224,7 +224,7 @@ class WhatsAppService
         Log::info('📤 Fetching WABA info from Meta');
         $meResponse = Http::withToken($accessToken)->get(
             "{$this->apiUrl}/v22.0/me",
-            ['fields' => 'id,name,email,picture']
+            ['fields' => 'id,name,whatsapp_business_accounts']
         );
 
         Log::info('📥 WABA info response', [
@@ -243,7 +243,8 @@ class WhatsAppService
         }
 
         $meData = $meResponse->json();
-        $wabaId = $meData['id'] ?? null;
+        $wabaData = $meData['whatsapp_business_accounts']['data'] ?? [];
+        $wabaId = $wabaData[0]['id'] ?? null;
 
         Log::info('✅ WABA ID extracted', [
             'waba_id' => $wabaId,
@@ -251,7 +252,7 @@ class WhatsAppService
 
         if (!$wabaId) {
             Log::error('❌ WABA ID not found', ['response' => $meData]);
-            throw new \Exception('WABA ID not found. Please ensure you have proper permissions.');
+            throw new \Exception('WABA ID not found. Please ensure your access token has business permissions.');
         }
 
         // Step 3: Get phone numbers for this WABA
