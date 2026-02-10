@@ -220,11 +220,11 @@ class WhatsAppService
      */
     protected function fetchWabaInfoWithAccessToken(string $accessToken): array
     {
-        // Step 2: Get WABA info with the access token
-        Log::info('📤 Fetching WABA info from Meta');
+        // Step 2: Get businesses linked to the user
+        Log::info('📤 Fetching businesses for user from Meta');
         $meResponse = Http::withToken($accessToken)->get(
             "{$this->apiUrl}/v22.0/me",
-            ['fields' => 'id,name,whatsapp_business_accounts']
+            ['fields' => 'id,name,businesses']
         );
 
         Log::info('📥 WABA info response', [
@@ -243,7 +243,43 @@ class WhatsAppService
         }
 
         $meData = $meResponse->json();
-        $wabaData = $meData['whatsapp_business_accounts']['data'] ?? [];
+        $businesses = $meData['businesses']['data'] ?? [];
+        $businessId = $businesses[0]['id'] ?? null;
+
+        Log::info('✅ Business ID extracted', [
+            'business_id' => $businessId,
+        ]);
+
+        if (!$businessId) {
+            Log::error('❌ Business ID not found', ['response' => $meData]);
+            throw new \Exception('Business ID not found. Ensure the user has access to a Business Manager.');
+        }
+
+        // Step 3: Get WABA accounts owned by the business
+        Log::info('📤 Fetching owned WhatsApp Business Accounts', [
+            'business_id' => $businessId,
+        ]);
+        $wabaResponse = Http::withToken($accessToken)->get(
+            "{$this->apiUrl}/v22.0/{$businessId}/owned_whatsapp_business_accounts",
+            ['fields' => 'id,name']
+        );
+
+        Log::info('📥 WABA list response', [
+            'status' => $wabaResponse->status(),
+            'is_successful' => $wabaResponse->successful(),
+        ]);
+
+        if (!$wabaResponse->successful()) {
+            $errorData = $wabaResponse->json();
+            Log::error('❌ Failed to fetch WABA list', [
+                'status' => $wabaResponse->status(),
+                'error_response' => $errorData,
+            ]);
+            throw new \Exception('Failed to fetch WABA list: ' . ($errorData['error']['message'] ?? 'Unknown error'));
+        }
+
+        $wabaList = $wabaResponse->json();
+        $wabaData = $wabaList['data'] ?? [];
         $wabaId = $wabaData[0]['id'] ?? null;
 
         Log::info('✅ WABA ID extracted', [
@@ -251,11 +287,11 @@ class WhatsAppService
         ]);
 
         if (!$wabaId) {
-            Log::error('❌ WABA ID not found', ['response' => $meData]);
-            throw new \Exception('WABA ID not found. Please ensure your access token has business permissions.');
+            Log::error('❌ WABA ID not found', ['response' => $wabaList ?? $meData]);
+            throw new \Exception('WABA ID not found. Ensure the business has a WhatsApp Business Account.');
         }
 
-        // Step 3: Get phone numbers for this WABA
+        // Step 4: Get phone numbers for this WABA
         Log::info('📤 Fetching phone numbers for WABA', ['waba_id' => $wabaId]);
         $phoneResponse = Http::withToken($accessToken)->get(
             "{$this->apiUrl}/v22.0/{$wabaId}/phone_numbers",
