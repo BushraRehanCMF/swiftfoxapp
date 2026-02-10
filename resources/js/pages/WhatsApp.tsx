@@ -119,7 +119,7 @@ const WhatsApp: React.FC = () => {
         client_id: currentConfig.app_id,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: 'whatsapp_business_messaging,business_management',
+        scope: 'whatsapp_business_messaging,business_management,whatsapp_business_management',
         display: 'popup',
         config_id: currentConfig.config_id,
       });
