@@ -4,9 +4,10 @@ use App\Http\Controllers\Web\WhatsAppTestController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\File;
 
-Route::get('/whatsapp-test', [WhatsAppTestController::class, 'show']);
-Route::post('/whatsapp-test/connect', [WhatsAppTestController::class, 'connect'])
-    ->name('whatsapp-test.connect');
+// Test routes (commented out - using main app instead)
+// Route::get('/whatsapp-test', [WhatsAppTestController::class, 'show']);
+// Route::post('/whatsapp-test/connect', [WhatsAppTestController::class, 'connect'])
+//     ->name('whatsapp-test.connect');
 
 // Serve static files if they exist, otherwise serve SPA
 Route::get('/{any?}', function ($any = null) {
