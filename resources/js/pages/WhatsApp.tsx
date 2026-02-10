@@ -114,82 +114,85 @@ const WhatsApp: React.FC = () => {
     }
 
     try {
-      await ensureFacebookSdk(currentConfig.app_id);
+      const redirectUri = window.location.href.split('#')[0].split('?')[0];
+      const params = new URLSearchParams({
+        client_id: currentConfig.app_id,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'whatsapp_business_messaging,business_management',
+        display: 'popup',
+        config_id: currentConfig.config_id,
+      });
 
-      // Handle FB.login response - this is where the authorization comes back
-      const handleFBLoginResponse = (response: any) => {
-        // Use IIFE to handle async code
-        (async () => {
-          console.log('📥 FB.login callback received');
-          console.log('Full response:', response);
-          console.log('Response keys:', Object.keys(response || {}));
+      const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?${params.toString()}`;
 
-          // The response structure for Embedded Signup is: { authResponse: {...}, status: 'connected' }
-          const authData = response?.authResponse;
-          console.log('authResponse:', authData);
-          console.log('authResponse keys:', Object.keys(authData || {}));
+      console.log('Opening OAuth dialog:', oauthUrl);
+      console.log('Redirect URI:', redirectUri);
 
-          // Prefer access token flow for Embedded Signup
-          const accessToken = authData?.accessToken;
-          // Check for input_token (JWT from Embedded Signup modal)
-          const inputToken = authData?.input_token;
-          // OR check for authorization code
-          const code = authData?.code;
+      const popup = window.open(oauthUrl, 'wa_oauth', 'width=650,height=720');
+      if (!popup) {
+        setError('Popup blocked. Please allow popups and try again.');
+        setConnecting(false);
+        return;
+      }
 
-          console.log('access_token:', accessToken ? accessToken.substring(0, 30) + '...' : 'NOT FOUND');
-          console.log('input_token:', inputToken ? inputToken.substring(0, 30) + '...' : 'NOT FOUND');
-          console.log('authorization code:', code ? code.substring(0, 30) + '...' : 'NOT FOUND');
+      setNotice('Completing signup in the popup window...');
 
-          if (!accessToken && !inputToken && !code) {
-            console.error('❌ No authorization data in FB.login response', {
-              has_response: !!response,
-              has_authResponse: !!authData,
-              authResponse_keys: Object.keys(authData || {}),
-            });
-            setError('Login failed. No authorization token received. Check console for details.');
+      const poll = window.setInterval(async () => {
+        try {
+          if (popup.closed) {
+            window.clearInterval(poll);
             setConnecting(false);
+            setNotice('');
+            setError('Popup closed before completion.');
             return;
           }
 
-          console.log('✅ Authorization data received');
+          const popupUrl = popup.location.href;
+          if (popupUrl && popupUrl.startsWith(window.location.origin)) {
+            const urlObj = new URL(popupUrl);
+            const code = urlObj.searchParams.get('code');
+            const error = urlObj.searchParams.get('error');
+            window.clearInterval(poll);
+            popup.close();
 
-          try {
-            // Send the token to backend to exchange for WABA info
-            console.log('📤 Sending authorization data to /whatsapp/connect...');
-            const connectResponse = await api.post('/whatsapp/connect', {
-              access_token: accessToken,
-              code: accessToken ? undefined : (inputToken || code),
-              is_input_token: !!inputToken,
-            });
+            if (error) {
+              setConnecting(false);
+              setError(`OAuth error: ${error}`);
+              return;
+            }
 
-            console.log('✅ WhatsApp connection successful:', connectResponse.data);
-            setNotice('WhatsApp connected successfully!');
-            await fetchStatus();
-          } catch (err: any) {
-            console.error('❌ Connection failed:', err.response?.data || err.message);
-            setError(
-              err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
-            );
-          } finally {
-            setConnecting(false);
+            if (!code) {
+              setConnecting(false);
+              setError('Login failed. No authorization code received.');
+              return;
+            }
+
+            console.log('✅ Authorization code received');
+
+            try {
+              console.log('📤 Sending authorization code to /whatsapp/connect...');
+              const connectResponse = await api.post('/whatsapp/connect', {
+                code,
+                redirect_uri: redirectUri,
+              });
+
+              console.log('✅ WhatsApp connection successful:', connectResponse.data);
+              setNotice('WhatsApp connected successfully!');
+              await fetchStatus();
+            } catch (err: any) {
+              console.error('❌ Connection failed:', err.response?.data || err.message);
+              setError(
+                err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
+              );
+            } finally {
+              setConnecting(false);
+            }
           }
-        })();
-      };
-
-      const expectedRedirectUri = `${window.location.origin}/whatsapp`;
-      console.log('Redirect URI for OAuth (page URL):', window.location.href);
-      console.log('Expected redirect URI:', expectedRedirectUri);
-
-      // Use FB.login with Embedded Signup config
-      // The response comes back in the callback with accessToken
-      window.FB?.login(handleFBLoginResponse, {
-        config_id: currentConfig.config_id,
-        response_type: 'code',
-        override_default_response_type: true,
-        scope: 'whatsapp_business_messaging,business_management',
-      });
-
-      setNotice('Completing signup in the popup window...');
+        } catch (err) {
+          // wait for redirect to same origin
+        }
+      }, 500);
     } catch (err: any) {
       setError(err.message || 'Unable to start Embedded Signup.');
       setConnecting(false);
