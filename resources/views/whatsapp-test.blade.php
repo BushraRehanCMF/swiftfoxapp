@@ -72,22 +72,12 @@
 
     <script>
       const appId = "{{ $appId }}";
-      const configId = "{{ $configId }}";
       const connectBtn = document.getElementById('connect-btn');
       const logEl = document.getElementById('client-log');
 
       function log(message) {
         logEl.textContent += message + "\n";
       }
-
-      <script>
-        const appId = "{{ $appId }}";
-        const connectBtn = document.getElementById('connect-btn');
-        const logEl = document.getElementById('client-log');
-
-        function log(message) {
-          logEl.textContent += message + "\n";
-        }
 
         function buildOauthUrl() {
           const redirectUri = window.location.href.split('#')[0].split('?')[0];
@@ -153,13 +143,13 @@
           }, 500);
         }
 
-        connectBtn.addEventListener('click', () => {
-          connectBtn.disabled = true;
-          try {
-            openOauthPopup();
-          } catch (err) {
-            log('Error: ' + (err.message || 'Unknown error'));
-            connectBtn.disabled = false;
-          }
-        });
-      </script>
+      connectBtn.addEventListener('click', () => {
+        connectBtn.disabled = true;
+        try {
+          openOauthPopup();
+        } catch (err) {
+          log('Error: ' + (err.message || 'Unknown error'));
+          connectBtn.disabled = false;
+        }
+      });
+    </script>
