@@ -80,76 +80,86 @@
         logEl.textContent += message + "\n";
       }
 
-      function loadFacebookSdk() {
-        return new Promise((resolve, reject) => {
-          if (window.FB) {
-            resolve();
-            return;
-          }
-          window.fbAsyncInit = function () {
-            window.FB.init({
-              appId: appId,
-              cookie: true,
-              xfbml: false,
-              version: 'v18.0'
-            });
-            resolve();
-          };
-          const script = document.createElement('script');
-          script.src = 'https://connect.facebook.net/en_US/sdk.js';
-          script.async = true;
-          script.defer = true;
-          script.onerror = () => reject(new Error('Facebook SDK failed to load'));
-          document.body.appendChild(script);
-        });
-      }
+      <script>
+        const appId = "{{ $appId }}";
+        const connectBtn = document.getElementById('connect-btn');
+        const logEl = document.getElementById('client-log');
 
-      connectBtn.addEventListener('click', async () => {
-        log('Opening Embedded Signup...');
-        connectBtn.disabled = true;
-
-        try {
-          await loadFacebookSdk();
-          const dialogRedirectUri = window.location.href.split('#')[0];
-          log('SDK loaded');
-          log('Page URL: ' + window.location.href);
-          log('Redirect URI sent to server: ' + dialogRedirectUri);
-
-          window.FB.login((response) => {
-            log('FB.login response received');
-            const authData = response && response.authResponse ? response.authResponse : null;
-            const inputToken = authData ? authData.input_token : null;
-            const code = authData ? authData.code : null;
-            const accessToken = authData ? authData.accessToken : null;
-
-            log('access_token present: ' + (!!accessToken));
-            log('input_token present: ' + (!!inputToken));
-            log('code present: ' + (!!code));
-
-            if (!accessToken && !inputToken && !code) {
-              log('No authorization token received.');
-              connectBtn.disabled = false;
-              return;
-            }
-
-            document.getElementById('access-token').value = accessToken || '';
-            document.getElementById('oauth-code').value = accessToken ? '' : (inputToken || code || '');
-            document.getElementById('is-input-token').value = inputToken ? '1' : '0';
-            document.getElementById('redirect-uri').value = dialogRedirectUri;
-
-            log('Submitting to server...');
-            document.getElementById('connect-form').submit();
-          }, {
-            config_id: configId,
-            response_type: 'code',
-            override_default_response_type: true,
-            scope: 'whatsapp_business_messaging,business_management'
-          });
-        } catch (err) {
-          log('Error: ' + (err.message || 'Unknown error'));
-          connectBtn.disabled = false;
+        function log(message) {
+          logEl.textContent += message + "\n";
         }
-      });
-    </script>
-  </body>
-</html>
+
+        function buildOauthUrl() {
+          const redirectUri = window.location.href.split('#')[0].split('?')[0];
+          const params = new URLSearchParams({
+            client_id: appId,
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            scope: 'whatsapp_business_messaging,business_management',
+            display: 'popup'
+          });
+          return `https://www.facebook.com/v22.0/dialog/oauth?${params.toString()}`;
+        }
+
+        function openOauthPopup() {
+          const url = buildOauthUrl();
+          log('Opening OAuth dialog...');
+          log('Redirect URI: ' + window.location.href.split('#')[0].split('?')[0]);
+          const popup = window.open(url, 'wa_oauth', 'width=650,height=720');
+          if (!popup) {
+            throw new Error('Popup blocked. Please allow popups and try again.');
+          }
+
+          const poll = window.setInterval(() => {
+            try {
+              if (popup.closed) {
+                window.clearInterval(poll);
+                connectBtn.disabled = false;
+                log('Popup closed before completion.');
+                return;
+              }
+
+              const popupUrl = popup.location.href;
+              if (popupUrl && popupUrl.startsWith(window.location.origin)) {
+                const urlObj = new URL(popupUrl);
+                const code = urlObj.searchParams.get('code');
+                const error = urlObj.searchParams.get('error');
+                window.clearInterval(poll);
+                popup.close();
+
+                if (error) {
+                  log('OAuth error: ' + error);
+                  connectBtn.disabled = false;
+                  return;
+                }
+
+                if (!code) {
+                  log('No code received.');
+                  connectBtn.disabled = false;
+                  return;
+                }
+
+                document.getElementById('oauth-code').value = code;
+                document.getElementById('access-token').value = '';
+                document.getElementById('is-input-token').value = '0';
+                document.getElementById('redirect-uri').value = window.location.href.split('#')[0].split('?')[0];
+
+                log('Code received. Submitting to server...');
+                document.getElementById('connect-form').submit();
+              }
+            } catch (e) {
+              // Wait for redirect to same origin
+            }
+          }, 500);
+        }
+
+        connectBtn.addEventListener('click', () => {
+          connectBtn.disabled = true;
+          try {
+            openOauthPopup();
+          } catch (err) {
+            log('Error: ' + (err.message || 'Unknown error'));
+            connectBtn.disabled = false;
+          }
+        });
+      </script>
