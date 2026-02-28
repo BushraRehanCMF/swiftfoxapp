@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 type AccountUsage = {
@@ -25,6 +26,7 @@ type Account = {
 };
 
 const Usage: React.FC = () => {
+    const navigate = useNavigate();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -121,7 +123,15 @@ const Usage: React.FC = () => {
       </div>
 
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-700">
-        Need more conversations? Upgrade your plan to continue using WhatsApp features after the trial.
+        <div className="flex items-center justify-between">
+          <span>Need more conversations? Upgrade your plan to continue using WhatsApp features after the trial.</span>
+          <button
+            onClick={() => navigate('/pricing')}
+            className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
+          >
+            View Plans
+          </button>
+        </div>
       </div>
     </div>
   );
