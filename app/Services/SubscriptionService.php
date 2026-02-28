@@ -19,9 +19,19 @@ class SubscriptionService
      */
     public function getOrCreateStripeCustomer(Account $account, string $email, string $name): string
     {
-        // Return existing customer ID if already created
+        // Reuse existing customer if it exists in the currently configured Stripe account
         if ($account->stripe_customer_id) {
-            return $account->stripe_customer_id;
+            try {
+                $this->stripe->customers->retrieve($account->stripe_customer_id, []);
+
+                return $account->stripe_customer_id;
+            } catch (\Exception $exception) {
+                logger()->warning('Stored Stripe customer is invalid for current account, recreating customer', [
+                    'account_id' => $account->id,
+                    'stripe_customer_id' => $account->stripe_customer_id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
         // Create new Stripe customer
