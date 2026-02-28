@@ -34,7 +34,7 @@ const plans: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    priceId: 'price_1T5tybCnkhO9wmrqikMxfCPy',
+    priceId: 'price_1T5vVLCnkhO9wmrqpe3GosIG',
     price: '$49',
     description: 'For growing teams',
     conversationLimit: 2000,
