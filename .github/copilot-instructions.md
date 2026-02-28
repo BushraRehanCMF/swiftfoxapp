@@ -125,11 +125,10 @@ app-swiftfox/
 
 | Component | Technology |
 |-----------|------------|
-| Provider | Paddle (Merchant of Record) |
-| Integration | Paddle webhooks only |
+| Provider | Stripe |
+| Integration | Stripe webhooks + Checkout Session |
 
 **Restrictions:**
-- ❌ NO Stripe
 - ❌ NO invoices in V1
 
 ---
@@ -617,11 +616,10 @@ WHATSAPP_APP_ID=
 WHATSAPP_APP_SECRET=
 WHATSAPP_WEBHOOK_VERIFY_TOKEN=
 
-# Paddle
-PADDLE_VENDOR_ID=
-PADDLE_VENDOR_AUTH_CODE=
-PADDLE_PUBLIC_KEY=
-PADDLE_WEBHOOK_SECRET=
+# Stripe
+STRIPE_KEY=
+STRIPE_SECRET=
+STRIPE_WEBHOOK_SECRET=
 
 # Trial Settings
 TRIAL_DAYS=14
@@ -637,4 +635,5 @@ TRIAL_CONVERSATION_LIMIT=100
 - [Tailwind CSS](https://tailwindcss.com/docs)
 - [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api)
 - [Meta Embedded Signup](https://developers.facebook.com/docs/whatsapp/embedded-signup)
-- [Paddle Documentation](https://developer.paddle.com)
+- [Stripe Documentation](https://stripe.com/docs/api)
+- [Stripe Webhooks](https://stripe.com/docs/webhooks)

@@ -38,18 +38,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Paddle Settings
+    | Stripe Settings
     |--------------------------------------------------------------------------
     |
-    | Configuration for Paddle payment integration.
+    | Configuration for Stripe payment integration.
     |
     */
 
-    'paddle' => [
-        'vendor_id' => env('PADDLE_VENDOR_ID'),
-        'vendor_auth_code' => env('PADDLE_VENDOR_AUTH_CODE'),
-        'public_key' => env('PADDLE_PUBLIC_KEY'),
-        'webhook_secret' => env('PADDLE_WEBHOOK_SECRET'),
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
 ];

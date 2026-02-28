@@ -2,10 +2,13 @@
 
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\AutomationController;
+use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\BusinessHoursController;
+use App\Http\Controllers\Api\V1\CheckoutController;
 use App\Http\Controllers\Api\V1\ContactController;
 use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\LabelController;
+use App\Http\Controllers\Api\V1\StripeWebhookController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\WhatsAppController;
 use App\Http\Controllers\Api\V1\WhatsAppWebhookController;
@@ -48,6 +51,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/logout', [AuthController::class, 'logout']);
             Route::get('/user', [AuthController::class, 'user']);
         });
+
+        /*
+        |--------------------------------------------------------------
+        | Billing
+        |--------------------------------------------------------------
+        */
+        Route::get('/billing', [BillingController::class, 'getInfo']);
 
         /*
         |--------------------------------------------------------------------------
@@ -160,6 +170,17 @@ Route::prefix('v1')->group(function () {
                 Route::get('/check', [BusinessHoursController::class, 'check']);
             });
 
+            /*
+            |--------------------------------------------------------------
+            | Billing & Subscription (Owner Only)
+            |--------------------------------------------------------------
+            */
+            Route::prefix('checkout')->group(function () {
+                Route::post('/session', [CheckoutController::class, 'createSession']);
+                Route::get('/billing-portal', [CheckoutController::class, 'billingPortal']);
+                Route::post('/cancel-subscription', [CheckoutController::class, 'cancelSubscription']);
+            });
+
         });
 
     });
@@ -173,6 +194,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/', [WhatsAppWebhookController::class, 'verify']);
         Route::post('/', [WhatsAppWebhookController::class, 'handle']);
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stripe Webhook Routes (Public - verified by signature)
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);
 
     /*
     |--------------------------------------------------------------------------

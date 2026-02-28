@@ -27,10 +27,15 @@ class Account extends Model
     protected $fillable = [
         'name',
         'trial_ends_at',
+        'subscription_ends_at',
         'subscription_status',
         'conversations_used',
         'conversations_limit',
         'timezone',
+        'stripe_customer_id',
+        'stripe_subscription_id',
+        'stripe_product_id',
+        'paddle_subscription_id',
     ];
 
     /**
@@ -42,6 +47,7 @@ class Account extends Model
     {
         return [
             'trial_ends_at' => 'datetime',
+            'subscription_ends_at' => 'datetime',
             'conversations_used' => 'integer',
             'conversations_limit' => 'integer',
         ];
