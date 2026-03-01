@@ -202,6 +202,28 @@ class Account extends Model
     }
 
     /**
+     * Get current subscription plan name.
+     */
+    public function getSubscriptionPlanName(): string
+    {
+        if (!$this->hasActiveSubscription() || !$this->stripe_product_id) {
+            return 'No Active Plan';
+        }
+
+        // Get all plans from config
+        $plans = config('swiftfox.stripe.plans', []);
+        
+        // Search for the plan that matches this price_id
+        foreach ($plans as $planKey => $planData) {
+            if (($planData['price_id'] ?? null) === $this->stripe_product_id) {
+                return $planData['name'] ?? ucfirst($planKey);
+            }
+        }
+
+        return 'Custom Plan';
+    }
+
+    /**
      * Increment the conversation count.
      */
     public function incrementConversationCount(): void

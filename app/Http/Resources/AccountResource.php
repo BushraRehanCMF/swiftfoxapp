@@ -29,6 +29,7 @@ class AccountResource extends JsonResource
                 'has_active_subscription' => $this->hasActiveSubscription(),
                 'ends_at' => $this->subscription_ends_at,
                 'stripe_subscription_id' => $this->stripe_subscription_id,
+                'plan_name' => $this->getSubscriptionPlanName(),
             ],
             'usage' => [
                 'conversations_used' => $this->conversations_used,

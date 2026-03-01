@@ -18,6 +18,7 @@ type AccountTrial = {
 type AccountSubscription = {
   has_active_subscription: boolean;
   ends_at?: string | null;
+  plan_name?: string;
 };
 
 type Account = {
@@ -99,7 +100,7 @@ const Usage: React.FC = () => {
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="text-xs uppercase tracking-wide text-gray-400">{statusLabel}</div>
           <div className="mt-2 text-lg font-semibold text-gray-900">
-            {isOnTrial ? 'On trial' : 'Subscription active'}
+            {isOnTrial ? 'On trial' : account.subscription?.plan_name || 'Subscription active'}
           </div>
           <div className="mt-2 text-sm text-gray-600">
             {isOnTrial
