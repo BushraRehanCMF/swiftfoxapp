@@ -1,60 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
 interface Plan {
   id: string;
   name: string;
-  priceId: string;
-  price: string;
+  price_id: string;
+  price: number;
+  currency: string;
   description: string;
   features: string[];
-  conversationLimit: number;
+  conversation_limit: number;
   popular?: boolean;
 }
 
-const plans: Plan[] = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    priceId: 'price_1T5vTQCvCAvaipQzhXgCLKR2',
-    price: '$25',
-    description: 'Perfect for small businesses',
-    conversationLimit: 500,
-    features: [
-      '500 conversations/month',
-      'WhatsApp Business integration',
-      'Shared inbox',
-      'Labels & organization',
-      'Basic automations',
-      'Business hours',
-      'Email support',
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    priceId: 'price_1T5vTqCvCAvaipQzECijUTXY',
-    price: '$49',
-    description: 'For growing teams',
-    conversationLimit: 2000,
-    popular: true,
-    features: [
-      '2,000 conversations/month',
-      'Everything in Starter',
-      'Advanced automations',
-      'Team collaboration',
-      'Webhooks',
-      'Priority support',
-      'Custom labels',
-    ],
-  },
-];
-
 const Pricing: React.FC = () => {
   const navigate = useNavigate();
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await api.get('/pricing');
+        setPlans(response.data.data);
+      } catch (err) {
+        console.error('Failed to fetch plans:', err);
+        setError('Failed to load pricing plans. Please refresh the page.');
+      } finally {
+        setLoadingPlans(false);
+      }
+    };
+
+    fetchPlans();
+  }, []);
 
   const handleUpgrade = async (plan: Plan) => {
     setLoading(plan.id);
@@ -62,7 +43,7 @@ const Pricing: React.FC = () => {
 
     try {
       const response = await api.post('/checkout/session', {
-        price_id: plan.priceId,
+        price_id: plan.price_id,
         success_url: `${window.location.origin}/usage?success=true`,
         cancel_url: `${window.location.origin}/pricing`,
       });
@@ -76,6 +57,15 @@ const Pricing: React.FC = () => {
       setLoading(null);
     }
   };
+
+  if (loadingPlans) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-12 text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <p className="mt-4 text-gray-600">Loading pricing plans...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -114,7 +104,7 @@ const Pricing: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h2>
               <p className="text-gray-600 text-sm mb-4">{plan.description}</p>
               <div className="mb-4">
-                <span className="text-5xl font-bold text-gray-900">{plan.price}</span>
+                <span className="text-5xl font-bold text-gray-900">${plan.price}</span>
                 <span className="text-gray-600 ml-2">/month</span>
               </div>
               <button

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\StripeWebhookController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\WhatsAppController;
 use App\Http\Controllers\Api\V1\WhatsAppWebhookController;
+use App\Http\Controllers\Api\V1\PricingController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,6 +27,13 @@ use Illuminate\Support\Facades\Route;
 
 // API v1 Routes
 Route::prefix('v1')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Routes
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/pricing', [PricingController::class, 'index']);
 
     /*
     |--------------------------------------------------------------------------
