@@ -28,6 +28,7 @@ class Account extends Model
         'name',
         'trial_ends_at',
         'subscription_ends_at',
+        'cancel_at_period_end',
         'subscription_status',
         'conversations_used',
         'conversations_limit',
@@ -48,6 +49,7 @@ class Account extends Model
         return [
             'trial_ends_at' => 'datetime',
             'subscription_ends_at' => 'datetime',
+            'cancel_at_period_end' => 'boolean',
             'conversations_used' => 'integer',
             'conversations_limit' => 'integer',
         ];
@@ -150,7 +152,15 @@ class Account extends Model
      */
     public function hasActiveSubscription(): bool
     {
-        return $this->subscription_status === self::STATUS_ACTIVE;
+        if ($this->subscription_status !== self::STATUS_ACTIVE) {
+            return false;
+        }
+
+        if ($this->cancel_at_period_end && $this->subscription_ends_at && $this->subscription_ends_at->isPast()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

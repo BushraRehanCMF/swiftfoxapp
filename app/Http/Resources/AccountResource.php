@@ -28,6 +28,7 @@ class AccountResource extends JsonResource
             'subscription' => [
                 'has_active_subscription' => $this->hasActiveSubscription(),
                 'ends_at' => $this->subscription_ends_at,
+                'cancel_at_period_end' => (bool) $this->cancel_at_period_end,
                 'stripe_subscription_id' => $this->stripe_subscription_id,
                 'plan_name' => $this->getSubscriptionPlanName(),
             ],

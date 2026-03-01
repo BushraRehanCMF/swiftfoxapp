@@ -140,6 +140,7 @@ class SubscriptionService
             'stripe_product_id' => $priceId,
             'subscription_status' => Account::STATUS_ACTIVE,
             'subscription_ends_at' => $subscriptionEndsAt,
+            'cancel_at_period_end' => false,
             'conversations_used' => 0, // Reset on new subscription
             'conversations_limit' => 500, // Default paid plan limit (customize as needed)
         ]);
@@ -181,6 +182,7 @@ class SubscriptionService
             'subscription_status' => in_array($status, ['canceled', 'incomplete_expired'], true)
                 ? Account::STATUS_CANCELLED
                 : Account::STATUS_ACTIVE,
+            'cancel_at_period_end' => $cancelAtPeriodEnd,
         ];
 
         if ($currentPeriodEnd) {
@@ -231,6 +233,7 @@ class SubscriptionService
         $account->update([
             'subscription_status' => Account::STATUS_CANCELLED,
             'stripe_subscription_id' => null,
+            'cancel_at_period_end' => false,
         ]);
 
         logger()->info('Subscription deleted webhook synced', [
@@ -318,6 +321,7 @@ class SubscriptionService
             $account->update([
                 'subscription_status' => Account::STATUS_ACTIVE,
                 'subscription_ends_at' => $subscriptionEndsAt,
+                'cancel_at_period_end' => true,
             ]);
 
             logger()->info('Subscription cancellation scheduled at period end', [

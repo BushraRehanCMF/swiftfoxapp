@@ -18,6 +18,7 @@ type AccountTrial = {
 type AccountSubscription = {
   has_active_subscription: boolean;
   ends_at?: string | null;
+  cancel_at_period_end?: boolean;
   plan_name?: string;
 };
 
@@ -107,7 +108,8 @@ const Usage: React.FC = () => {
   }
 
   const isOnTrial = account.trial.is_on_trial;
-  const hasActiveSubscription = account.subscription_status === 'active';
+  const hasActiveSubscription = account.subscription?.has_active_subscription ?? account.subscription_status === 'active';
+  const cancellationScheduled = Boolean(account.subscription?.cancel_at_period_end && hasActiveSubscription);
   const endDate = hasActiveSubscription ? account.subscription?.ends_at : account.trial.ends_at;
   const statusLabel = isOnTrial ? 'Trial Status' : 'Subscription Status';
 
@@ -129,14 +131,19 @@ const Usage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="text-xs uppercase tracking-wide text-gray-400">{statusLabel}</div>
-          <div className="mt-2 text-lg font-semibold text-gray-900">
-            {isOnTrial ? 'On trial' : account.subscription?.plan_name || 'Subscription active'}
+          <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <span>{isOnTrial ? 'On trial' : account.subscription?.plan_name || 'Subscription active'}</span>
+            {cancellationScheduled && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Cancellation Scheduled</span>
+            )}
           </div>
           <div className="mt-2 text-sm text-gray-600">
             {isOnTrial
               ? `${account.trial.days_remaining} days remaining`
               : hasActiveSubscription
-                ? 'Active and billing monthly'
+                ? cancellationScheduled
+                  ? 'Scheduled to end at period end'
+                  : 'Active and billing monthly'
                 : 'Subscription inactive'}
           </div>
           <div className="mt-4 text-xs text-gray-500">
@@ -188,14 +195,20 @@ const Usage: React.FC = () => {
       {hasActiveSubscription && canManageSubscription && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
           <div className="flex items-center justify-between">
-            <span>Need to stop billing? Cancel now and access remains active until your period end date.</span>
-            <button
-              onClick={handleCancelSubscription}
-              disabled={cancelling}
-              className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
-            </button>
+            <span>
+              {cancellationScheduled
+                ? 'Your cancellation is scheduled. Billing will stop at period end.'
+                : 'Need to stop billing? Cancel now and access remains active until your period end date.'}
+            </span>
+            {!cancellationScheduled && (
+              <button
+                onClick={handleCancelSubscription}
+                disabled={cancelling}
+                className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
+              </button>
+            )}
           </div>
         </div>
       )}
