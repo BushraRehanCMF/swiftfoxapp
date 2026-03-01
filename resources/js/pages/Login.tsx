@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import logo from '../assets/logo.png';
 import { useAuth } from '../stores/auth';
 
 const Login: React.FC = () => {
@@ -27,7 +28,10 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded shadow-md w-full max-w-sm">
-        <h2 className="text-2xl font-bold text-emerald-700 mb-6 text-center">Sign in to SwiftFox</h2>
+        <div className="mb-4 flex justify-center">
+          <img src={logo} alt="SwiftFox logo" className="h-10 w-auto" />
+        </div>
+        <h2 className="text-2xl font-bold text-emerald-700 mb-6 text-center">Login</h2>
         {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
         <div className="mb-4">
           <label className="block text-gray-700 mb-1">Email</label>
@@ -58,7 +62,13 @@ const Login: React.FC = () => {
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
         <div className="mt-4 text-center">
-          <a href="/reset-password" className="text-emerald-700 hover:underline text-sm">Forgot password?</a>
+          <Link to="/reset-password" className="text-emerald-700 hover:underline text-sm">Forgot password?</Link>
+        </div>
+        <div className="mt-2 text-center text-sm text-gray-600">
+          New to SwiftFox?{' '}
+          <Link to="/register" className="text-emerald-700 hover:underline">
+            Create account
+          </Link>
         </div>
       </form>
     </div>

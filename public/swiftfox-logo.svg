@@ -1,0 +1,6 @@
+<svg width="220" height="40" viewBox="0 0 220 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SwiftFox">
+  <rect x="1" y="1" width="38" height="38" rx="8" stroke="#059669" stroke-width="2"/>
+  <path d="M13 20.5C13 15.8056 16.8056 12 21.5 12C26.1944 12 30 15.8056 30 20.5C30 25.1944 26.1944 29 21.5 29C19.8954 29 18.3962 28.5554 17.1174 27.7812" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 24L10.5 29.5" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+  <text x="50" y="27" fill="#059669" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="700">SwiftFox</text>
+</svg>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import logo from '../assets/logo.png';
 import LogoutButton from './LogoutButton';
 
 interface TopBarProps {
@@ -14,7 +15,9 @@ const TopBar: React.FC<TopBarProps> = ({ accountName = 'Account', trialDaysLeft 
 
   return (
     <header className="h-16 flex items-center justify-between px-6 bg-white border-b border-gray-200 shadow-sm">
-      <div className="font-semibold text-lg text-emerald-700">{accountName}</div>
+      <div className="flex items-center gap-4">
+        <div className="font-semibold text-lg text-emerald-700">{accountName}</div>
+      </div>
       <div className="flex items-center gap-6">
         <div className="text-sm text-gray-700">
           Trial: <span className="font-medium text-emerald-700">{trialDaysLeft} days left</span>

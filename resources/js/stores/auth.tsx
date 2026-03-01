@@ -13,7 +13,17 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
+}
+
+interface RegisterPayload {
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+  company_name: string;
+  timezone?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +78,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const register = async (payload: RegisterPayload) => {
+    setLoading(true);
+    try {
+      const { data: registerResponse } = await api.post('/auth/register', payload);
+      const token = registerResponse?.data?.token;
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
+      }
+
+      const { data } = await api.get('/auth/user');
+      setUser(data.data);
+    } catch (err: any) {
+      setUser(null);
+      localStorage.removeItem('auth_token');
+      delete api.defaults.headers.common.Authorization;
+
+      const errorMessage =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Registration failed';
+
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     await api.post('/auth/logout');
     setUser(null);
@@ -76,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
