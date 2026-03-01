@@ -76,6 +76,7 @@ const Register: React.FC = () => {
             <div className="bg-emerald-50 border border-emerald-200 rounded p-4 mb-6">
               <p className="text-sm text-gray-700">
                 Click the link in your email to verify your account and start your 14-day free trial.
+                (check your spam/junk folder if you don't see it in your inbox)
               </p>
               <p className="text-xs text-gray-600 mt-2">
                 The verification link expires in 24 hours.
