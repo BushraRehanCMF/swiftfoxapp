@@ -4,6 +4,7 @@ import TailwindTest from './pages/TailwindTest';
 import Layout from './Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import WhatsApp from './pages/WhatsApp';
 import Labels from './pages/Labels';
@@ -28,6 +29,7 @@ const AppRouter: React.FC = () => (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/tailwind-test" element={<TailwindTest />} />
       <Route

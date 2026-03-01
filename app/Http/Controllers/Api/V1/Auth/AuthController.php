@@ -8,20 +8,24 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
+use App\Models\LoginAttempt;
+use App\Models\User;
 use App\Services\AuthService;
+use App\Services\EmailVerificationService;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
+use Illuminate\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     public function __construct(
-        protected AuthService $authService
+        protected AuthService $authService,
+        protected EmailVerificationService $emailVerificationService
     ) {}
 
     /**
@@ -31,20 +35,13 @@ class AuthController extends Controller
     {
         $result = $this->authService->register($request->validated());
 
-        // Log the user in
-        Auth::login($result['user']);
-
-        // Create a token for API access
-        $token = $result['user']->createToken('auth-token')->plainTextToken;
-
-        // Load account relation for response
-        $result['user']->load('account');
+        // Send email verification link
+        $this->emailVerificationService->sendVerificationEmail($result['user']);
 
         return response()->json([
-            'message' => 'Account created successfully. Your 14-day trial has started.',
+            'message' => 'Account created successfully. Please check your email to verify your account before signing in.',
             'data' => [
-                'user' => new UserResource($result['user']),
-                'token' => $token,
+                'email' => $result['user']->email,
             ],
         ], 201);
     }
@@ -54,9 +51,35 @@ class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $request->authenticate();
+        $ipAddress = $request->ip() ?? '0.0.0.0';
+
+        // Check if account is locked due to failed attempts
+        if (LoginAttempt::isLocked($request->email, $ipAddress)) {
+            throw ValidationException::withMessages([
+                'email' => ['Too many failed login attempts. Please try again in 15 minutes.'],
+            ]);
+        }
+
+        // Authenticate
+        try {
+            $request->authenticate();
+        } catch (ValidationException $e) {
+            // Record failed attempt
+            LoginAttempt::recordFailedAttempt($request->email, $ipAddress);
+            throw $e;
+        }
 
         $user = Auth::user();
+
+        // Check if email is verified
+        if (!$user->hasVerifiedEmail()) {
+            throw ValidationException::withMessages([
+                'email' => ['Please verify your email address. Check your inbox for a verification link.'],
+            ]);
+        }
+
+        // Clear failed login attempts on successful login
+        LoginAttempt::clearAttempts($request->email, $ipAddress);
 
         // Check if account is disabled (for non-super admins)
         if ($user->hasAccount() && $user->account->subscription_status === 'expired') {
@@ -146,6 +169,24 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    /**
+     * Verify email address from signed link.
+     */
+    public function verifyEmail(Request $request, User $user): JsonResponse
+    {
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Email already verified.',
+            ]);
+        }
+
+        $this->emailVerificationService->verifyEmail($user);
+
+        return response()->json([
+            'message' => 'Email verified successfully. You can now log in.',
         ]);
     }
 }

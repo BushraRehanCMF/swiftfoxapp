@@ -81,21 +81,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (payload: RegisterPayload) => {
     setLoading(true);
     try {
-      const { data: registerResponse } = await api.post('/auth/register', payload);
-      const token = registerResponse?.data?.token;
+      // Registration now requires email verification, so no token is returned
+      await api.post('/auth/register', payload);
 
-      if (token) {
-        localStorage.setItem('auth_token', token);
-        api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      }
-
-      const { data } = await api.get('/auth/user');
-      setUser(data.data);
-    } catch (err: any) {
+      // User will be set after they verify email and login
       setUser(null);
-      localStorage.removeItem('auth_token');
-      delete api.defaults.headers.common.Authorization;
-
+    } catch (err: any) {
       const errorMessage =
         err.response?.data?.error?.message ||
         err.response?.data?.message ||
