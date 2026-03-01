@@ -124,7 +124,7 @@ const Usage: React.FC = () => {
 
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-700">
         <div className="flex items-center justify-between">
-          <span>Need more conversations? Upgrade your plan to continue using WhatsApp features after the trial.</span>
+          <span>Need more conversations? Upgrade your plan to continue using WhatsApp features.</span>
           <button
             onClick={() => navigate('/pricing')}
             className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
