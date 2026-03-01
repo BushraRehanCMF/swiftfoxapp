@@ -25,6 +25,11 @@ class AccountResource extends JsonResource
                 'ends_at' => $this->trial_ends_at,
                 'days_remaining' => $this->getRemainingTrialDays(),
             ],
+            'subscription' => [
+                'has_active_subscription' => $this->hasActiveSubscription(),
+                'ends_at' => $this->subscription_ends_at,
+                'stripe_subscription_id' => $this->stripe_subscription_id,
+            ],
             'usage' => [
                 'conversations_used' => $this->conversations_used,
                 'conversations_limit' => $this->conversations_limit,

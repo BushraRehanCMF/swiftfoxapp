@@ -15,18 +15,24 @@ type AccountTrial = {
   days_remaining: number;
 };
 
+type AccountSubscription = {
+  has_active_subscription: boolean;
+  ends_at?: string | null;
+};
+
 type Account = {
   id: string;
   name: string;
   subscription_status: string;
   trial: AccountTrial;
+  subscription?: AccountSubscription;
   usage: AccountUsage;
   whatsapp_connected: boolean;
   can_send_messages: boolean;
 };
 
 const Usage: React.FC = () => {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,27 +79,39 @@ const Usage: React.FC = () => {
     return <div className="text-sm text-gray-500">No account data available.</div>;
   }
 
+  const isOnTrial = account.trial.is_on_trial;
+  const hasActiveSubscription = account.subscription_status === 'active';
+  const endDate = hasActiveSubscription ? account.subscription?.ends_at : account.trial.ends_at;
+  const statusLabel = isOnTrial ? 'Trial Status' : 'Subscription Status';
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Usage & Trial</h1>
-        <p className="text-sm text-gray-600 mt-1">Track trial status and conversation usage.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">Usage & {isOnTrial ? 'Trial' : 'Subscription'}</h1>
+        <p className="text-sm text-gray-600 mt-1">
+          {isOnTrial 
+            ? 'Track trial status and conversation usage.' 
+            : 'Manage your subscription and monitor conversation usage.'}
+        </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="text-xs uppercase tracking-wide text-gray-400">Trial status</div>
+          <div className="text-xs uppercase tracking-wide text-gray-400">{statusLabel}</div>
           <div className="mt-2 text-lg font-semibold text-gray-900">
-            {account.trial.is_on_trial ? 'On trial' : account.subscription_status}
+            {isOnTrial ? 'On trial' : 'Subscription active'}
           </div>
           <div className="mt-2 text-sm text-gray-600">
-            {account.trial.is_on_trial
+            {isOnTrial
               ? `${account.trial.days_remaining} days remaining`
-              : account.trial.is_expired
-                ? 'Trial expired'
-                : 'Subscription active'}
+              : hasActiveSubscription
+                ? 'Active and billing monthly'
+                : 'Subscription inactive'}
           </div>
-          <div className="mt-4 text-xs text-gray-500">Ends at: {formatDate(account.trial.ends_at)}</div>
+          <div className="mt-4 text-xs text-gray-500">
+            {isOnTrial ? 'Trial ends at: ' : 'Renews at: '}
+            {formatDate(endDate)}
+          </div>
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -122,17 +140,19 @@ const Usage: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-700">
-        <div className="flex items-center justify-between">
-          <span>Need more conversations? Upgrade your plan to continue using WhatsApp features.</span>
-          <button
-            onClick={() => navigate('/pricing')}
-            className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
-          >
-            View Plans
-          </button>
+      {isOnTrial && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-700">
+          <div className="flex items-center justify-between">
+            <span>Need more conversations? Upgrade your plan to continue using WhatsApp features after the trial.</span>
+            <button
+              onClick={() => navigate('/pricing')}
+              className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
+            >
+              View Plans
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
