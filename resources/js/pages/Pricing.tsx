@@ -17,7 +17,7 @@ const plans: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    priceId: 'price_1T5txrCnkhO9wmrqXo33JSLX',
+    priceId: 'price_1T5vTQCvCAvaipQzhXgCLKR2',
     price: '$25',
     description: 'Perfect for small businesses',
     conversationLimit: 500,
@@ -34,7 +34,7 @@ const plans: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    priceId: 'price_1T5vVLCnkhO9wmrqpe3GosIG',
+    priceId: 'price_1T5vTqCvCAvaipQzECijUTXY',
     price: '$49',
     description: 'For growing teams',
     conversationLimit: 2000,
