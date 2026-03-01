@@ -131,12 +131,15 @@ class SubscriptionService
 
         logger()->info('Found account, updating subscription', ['account_id' => $account->id]);
 
+        // Determine subscription end date
+        $subscriptionEndsAt = $currentPeriodEnd ? now()->setTimestamp($currentPeriodEnd) : now()->addMonth();
+
         // Update account with subscription
         $account->update([
             'stripe_subscription_id' => $subscriptionId,
             'stripe_product_id' => $priceId,
             'subscription_status' => Account::STATUS_ACTIVE,
-            'subscription_ends_at' => now()->setTimestamp($currentPeriodEnd),
+            'subscription_ends_at' => $subscriptionEndsAt,
             'conversations_used' => 0, // Reset on new subscription
             'conversations_limit' => 500, // Default paid plan limit (customize as needed)
         ]);
@@ -149,8 +152,13 @@ class SubscriptionService
      */
     public function handleInvoicePaid(array $invoiceData): void
     {
-        $subscriptionId = $invoiceData['subscription'];
+        $subscriptionId = $invoiceData['subscription'] ?? null;
         $periodEnd = $invoiceData['lines']['data'][0]['period']['end'] ?? null;
+
+        if (!$subscriptionId) {
+            logger()->warning('Invoice paid webhook received without subscription ID');
+            return;
+        }
 
         // Find account by Stripe subscription ID
         $account = Account::where('stripe_subscription_id', $subscriptionId)->first();
@@ -176,7 +184,12 @@ class SubscriptionService
      */
     public function handleInvoicePaymentFailed(array $invoiceData): void
     {
-        $subscriptionId = $invoiceData['subscription'];
+        $subscriptionId = $invoiceData['subscription'] ?? null;
+
+        if (!$subscriptionId) {
+            logger()->warning('Invoice payment failed webhook received without subscription ID');
+            return;
+        }
 
         $account = Account::where('stripe_subscription_id', $subscriptionId)->first();
 
