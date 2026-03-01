@@ -22,6 +22,8 @@ class StripeWebhookController
      */
     public function handle(Request $request): Response
     {
+        logger()->info('Stripe webhook received', ['type' => 'incoming','path' => $request->path()]);
+
         $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
         $webhookSecret = config('swiftfox.stripe.webhook_secret');
@@ -33,6 +35,7 @@ class StripeWebhookController
                 $sigHeader,
                 $webhookSecret
             );
+            logger()->info('Webhook signature verified', ['event_type' => $event->type, 'event_id' => $event->id]);
         } catch (\UnexpectedValueException $e) {
             logger()->warning('Invalid Stripe webhook payload', ['error' => $e->getMessage()]);
             return response('Invalid payload', 400);
@@ -53,12 +56,14 @@ class StripeWebhookController
                 default => null,
             };
 
+            logger()->info('Webhook handled successfully', ['event_type' => $event->type]);
             return response('Webhook handled', 200);
         } catch (\Exception $e) {
             logger()->error('Error handling Stripe webhook', [
                 'event_type' => $event->type,
                 'event_id' => $event->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Return success anyway to prevent retries
@@ -84,7 +89,7 @@ class StripeWebhookController
      */
     protected function handleSubscriptionCreated(object $subscription): void
     {
-        $this->subscriptionService->handleSubscriptionCreated((array) $subscription);
+        $this->subscriptionService->handleSubscriptionCreated($subscription);
     }
 
     /**

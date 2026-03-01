@@ -91,22 +91,33 @@ class SubscriptionService
     /**
      * Handle subscription created event from webhook.
      */
-    public function handleSubscriptionCreated(array $subscriptionData): void
+    public function handleSubscriptionCreated(object $subscription): void
     {
-        $customerId = $subscriptionData['customer'];
-        $subscriptionId = $subscriptionData['id'];
-        $priceId = $subscriptionData['items']['data'][0]['price']['id'] ?? null;
-        $currentPeriodEnd = $subscriptionData['current_period_end'];
+        logger()->info('handleSubscriptionCreated called', ['subscription_id' => $subscription->id]);
+
+        $customerId = $subscription->customer;
+        $subscriptionId = $subscription->id;
+        $priceId = $subscription->items->data[0]->price->id ?? null;
+        $currentPeriodEnd = $subscription->current_period_end;
+
+        logger()->info('Extracted subscription data', [
+            'customer_id' => $customerId,
+            'subscription_id' => $subscriptionId,
+            'price_id' => $priceId,
+            'current_period_end' => $currentPeriodEnd,
+        ]);
 
         // Find account by Stripe customer ID
         $account = Account::where('stripe_customer_id', $customerId)->first();
 
         if (!$account) {
+            logger()->info('Account not found by customer_id, trying metadata');
             // Try to find by customer metadata
             try {
                 $customer = $this->stripe->customers->retrieve($customerId);
                 $accountId = $customer->metadata['account_id'] ?? null;
                 $account = $accountId ? Account::find($accountId) : null;
+                logger()->info('Retrieved customer from Stripe', ['account_id' => $accountId]);
             } catch (\Exception $e) {
                 logger()->error('Failed to retrieve Stripe customer', ['customer_id' => $customerId, 'error' => $e->getMessage()]);
                 return;
@@ -117,6 +128,8 @@ class SubscriptionService
             logger()->warning('Account not found for Stripe subscription', ['customer_id' => $customerId]);
             return;
         }
+
+        logger()->info('Found account, updating subscription', ['account_id' => $account->id]);
 
         // Update account with subscription
         $account->update([
