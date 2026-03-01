@@ -156,13 +156,16 @@ class CheckoutController
         }
 
         try {
-            $this->subscriptionService->cancelSubscription($account);
+            $result = $this->subscriptionService->cancelSubscription($account);
+            $account->refresh();
 
             return response()->json([
                 'data' => [
                     'subscription_status' => $account->subscription_status,
+                    'cancel_at_period_end' => $result['cancel_at_period_end'] ?? false,
+                    'subscription_ends_at' => $result['subscription_ends_at'] ?? $account->subscription_ends_at,
                 ],
-                'message' => 'Subscription cancelled successfully.',
+                'message' => 'Subscription cancellation scheduled for period end.',
             ], 200);
         } catch (\Exception $e) {
             logger()->error('Failed to cancel subscription', [

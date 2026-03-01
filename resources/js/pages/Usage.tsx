@@ -37,6 +37,9 @@ const Usage: React.FC = () => {
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [canManageSubscription, setCanManageSubscription] = useState(false);
 
   const usagePercent = useMemo(() => {
     if (!account) return 0;
@@ -44,22 +47,45 @@ const Usage: React.FC = () => {
     return Math.min(100, Math.round((account.usage.conversations_used / account.usage.conversations_limit) * 100));
   }, [account]);
 
-  useEffect(() => {
-    const fetchAccount = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const { data } = await api.get('/auth/user');
-        setAccount(data.data.account || null);
-      } catch (err: any) {
-        setError(err.response?.data?.error?.message || 'Unable to load usage data.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchAccount = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get('/auth/user');
+      setAccount(data.data.account || null);
+      setCanManageSubscription(data.data.role === 'owner');
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Unable to load usage data.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchAccount();
   }, []);
+
+  const handleCancelSubscription = async () => {
+    const confirmed = window.confirm('Cancel at period end? Your subscription will stay active until the current billing period ends.');
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCancelling(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const { data } = await api.post('/checkout/cancel-subscription');
+      setNotice(data.message || 'Subscription cancellation scheduled for period end.');
+      await fetchAccount();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Failed to cancel subscription.');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const formatDate = (value?: string | null) => {
     if (!value) return 'Unknown';
@@ -90,11 +116,15 @@ const Usage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Usage & {isOnTrial ? 'Trial' : 'Subscription'}</h1>
         <p className="text-sm text-gray-600 mt-1">
-          {isOnTrial 
-            ? 'Track trial status and conversation usage.' 
+          {isOnTrial
+            ? 'Track trial status and conversation usage.'
             : 'Manage your subscription and monitor conversation usage.'}
         </p>
       </div>
+
+      {notice && (
+        <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -150,6 +180,21 @@ const Usage: React.FC = () => {
               className="ml-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-semibold"
             >
               View Plans
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hasActiveSubscription && canManageSubscription && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
+          <div className="flex items-center justify-between">
+            <span>Need to stop billing? Cancel now and access remains active until your period end date.</span>
+            <button
+              onClick={handleCancelSubscription}
+              disabled={cancelling}
+              className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel Subscription'}
             </button>
           </div>
         </div>

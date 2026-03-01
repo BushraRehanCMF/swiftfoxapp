@@ -148,6 +148,98 @@ class SubscriptionService
     }
 
     /**
+     * Handle subscription updated event from webhook.
+     */
+    public function handleSubscriptionUpdated(object $subscription): void
+    {
+        $subscriptionId = $subscription->id ?? null;
+        $customerId = $subscription->customer ?? null;
+        $status = $subscription->status ?? null;
+        $cancelAtPeriodEnd = (bool) ($subscription->cancel_at_period_end ?? false);
+        $currentPeriodEnd = $subscription->current_period_end ?? null;
+
+        if (!$subscriptionId) {
+            logger()->warning('Subscription updated webhook missing subscription ID');
+            return;
+        }
+
+        $account = Account::where('stripe_subscription_id', $subscriptionId)->first();
+
+        if (!$account && $customerId) {
+            $account = Account::where('stripe_customer_id', $customerId)->first();
+        }
+
+        if (!$account) {
+            logger()->warning('Account not found for subscription update', [
+                'subscription_id' => $subscriptionId,
+                'customer_id' => $customerId,
+            ]);
+            return;
+        }
+
+        $updates = [
+            'subscription_status' => in_array($status, ['canceled', 'incomplete_expired'], true)
+                ? Account::STATUS_CANCELLED
+                : Account::STATUS_ACTIVE,
+        ];
+
+        if ($currentPeriodEnd) {
+            $updates['subscription_ends_at'] = now()->setTimestamp($currentPeriodEnd);
+        }
+
+        if (in_array($status, ['canceled', 'incomplete_expired'], true)) {
+            $updates['stripe_subscription_id'] = null;
+        }
+
+        $account->update($updates);
+
+        logger()->info('Subscription updated webhook synced', [
+            'account_id' => $account->id,
+            'subscription_id' => $subscriptionId,
+            'status' => $status,
+            'cancel_at_period_end' => $cancelAtPeriodEnd,
+        ]);
+    }
+
+    /**
+     * Handle subscription deleted event from webhook.
+     */
+    public function handleSubscriptionDeleted(object $subscription): void
+    {
+        $subscriptionId = $subscription->id ?? null;
+        $customerId = $subscription->customer ?? null;
+
+        if (!$subscriptionId) {
+            logger()->warning('Subscription deleted webhook missing subscription ID');
+            return;
+        }
+
+        $account = Account::where('stripe_subscription_id', $subscriptionId)->first();
+
+        if (!$account && $customerId) {
+            $account = Account::where('stripe_customer_id', $customerId)->first();
+        }
+
+        if (!$account) {
+            logger()->warning('Account not found for subscription deletion', [
+                'subscription_id' => $subscriptionId,
+                'customer_id' => $customerId,
+            ]);
+            return;
+        }
+
+        $account->update([
+            'subscription_status' => Account::STATUS_CANCELLED,
+            'stripe_subscription_id' => null,
+        ]);
+
+        logger()->info('Subscription deleted webhook synced', [
+            'account_id' => $account->id,
+            'subscription_id' => $subscriptionId,
+        ]);
+    }
+
+    /**
      * Handle invoice paid event from webhook.
      */
     public function handleInvoicePaid(array $invoiceData): void
@@ -207,27 +299,45 @@ class SubscriptionService
     /**
      * Cancel a subscription.
      */
-    public function cancelSubscription(Account $account): void
+    public function cancelSubscription(Account $account): array
     {
         if (!$account->stripe_subscription_id) {
-            return;
+            throw new \RuntimeException('No active Stripe subscription found.');
         }
 
         try {
-            $this->stripe->subscriptions->cancel($account->stripe_subscription_id);
-
-            $account->update([
-                'subscription_status' => Account::STATUS_CANCELLED,
-                'stripe_subscription_id' => null,
+            $subscription = $this->stripe->subscriptions->update($account->stripe_subscription_id, [
+                'cancel_at_period_end' => true,
             ]);
 
-            logger()->info('Subscription cancelled', ['account_id' => $account->id]);
+            $currentPeriodEnd = $subscription->current_period_end ?? null;
+            $subscriptionEndsAt = $currentPeriodEnd
+                ? now()->setTimestamp($currentPeriodEnd)
+                : $account->subscription_ends_at;
+
+            $account->update([
+                'subscription_status' => Account::STATUS_ACTIVE,
+                'subscription_ends_at' => $subscriptionEndsAt,
+            ]);
+
+            logger()->info('Subscription cancellation scheduled at period end', [
+                'account_id' => $account->id,
+                'subscription_id' => $account->stripe_subscription_id,
+                'current_period_end' => $currentPeriodEnd,
+            ]);
+
+            return [
+                'cancel_at_period_end' => (bool) ($subscription->cancel_at_period_end ?? true),
+                'subscription_ends_at' => $subscriptionEndsAt,
+            ];
         } catch (\Exception $e) {
             logger()->error('Failed to cancel subscription', [
                 'account_id' => $account->id,
                 'subscription_id' => $account->stripe_subscription_id,
                 'error' => $e->getMessage(),
             ]);
+
+            throw $e;
         }
     }
 

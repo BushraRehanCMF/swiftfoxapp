@@ -97,11 +97,7 @@ class StripeWebhookController
      */
     protected function handleSubscriptionUpdated(object $subscription): void
     {
-        logger()->info('Subscription updated', [
-            'subscription_id' => $subscription->id,
-            'customer_id' => $subscription->customer,
-            'status' => $subscription->status,
-        ]);
+        $this->subscriptionService->handleSubscriptionUpdated($subscription);
     }
 
     /**
@@ -109,10 +105,7 @@ class StripeWebhookController
      */
     protected function handleSubscriptionDeleted(object $subscription): void
     {
-        logger()->info('Subscription deleted', [
-            'subscription_id' => $subscription->id,
-            'customer_id' => $subscription->customer,
-        ]);
+        $this->subscriptionService->handleSubscriptionDeleted($subscription);
     }
 
     /**
