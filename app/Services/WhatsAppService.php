@@ -213,6 +213,94 @@ class WhatsAppService
     }
 
     /**
+     * Verify WABA access and fetch phone number details using user access token.
+     *
+     * This method is used when the Embedded Signup returns waba_id and phone_number_id directly.
+     * We use the USER'S access token (not system token) to verify they have access to the WABA.
+     *
+     * @param string $userAccessToken The access_token from Embedded Signup flow
+     * @param string $wabaId The WABA ID returned from Embedded Signup
+     * @param string $phoneNumberId The phone number ID returned from Embedded Signup
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string}
+     * @throws \Exception
+     */
+    public function verifyAndFetchWabaInfo(
+        string $userAccessToken,
+        string $wabaId,
+        string $phoneNumberId
+    ): array {
+        Log::info('🔍 Verifying WABA access with user access token', [
+            'token_preview' => substr($userAccessToken, 0, 30) . '...',
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        // CRITICAL: Use the USER'S access token to verify access to the WABA
+        // DO NOT use system user token here - it will fail with (#100) Missing Permission
+        $wabaResponse = Http::withToken($userAccessToken)->get(
+            "{$this->apiUrl}/v22.0/{$wabaId}",
+            ['fields' => 'id,name']
+        );
+
+        if (!$wabaResponse->successful()) {
+            $errorData = $wabaResponse->json();
+            Log::error('❌ Failed to verify WABA access with user token', [
+                'status' => $wabaResponse->status(),
+                'error_response' => $errorData,
+                'waba_id' => $wabaId,
+            ]);
+            throw new \Exception(
+                'Failed to verify WABA access: ' . ($errorData['error']['message'] ?? 'Permission denied')
+            );
+        }
+
+        Log::info('✅ WABA access verified with user token');
+
+        // Fetch phone number details to get display_phone_number
+        Log::info('📤 Fetching phone number details', ['phone_number_id' => $phoneNumberId]);
+        $phoneResponse = Http::withToken($userAccessToken)->get(
+            "{$this->apiUrl}/v22.0/{$phoneNumberId}",
+            ['fields' => 'id,display_phone_number,verified_name']
+        );
+
+        if (!$phoneResponse->successful()) {
+            $errorData = $phoneResponse->json();
+            Log::error('❌ Failed to fetch phone number details', [
+                'status' => $phoneResponse->status(),
+                'error_response' => $errorData,
+                'phone_number_id' => $phoneNumberId,
+            ]);
+            throw new \Exception(
+                'Failed to fetch phone number: ' . ($errorData['error']['message'] ?? 'Unknown error')
+            );
+        }
+
+        $phoneData = $phoneResponse->json();
+        $displayPhoneNumber = $phoneData['display_phone_number'] ?? null;
+
+        if (!$displayPhoneNumber) {
+            Log::error('❌ No display_phone_number in response', ['response' => $phoneData]);
+            throw new \Exception('Phone number not found in response.');
+        }
+
+        Log::info('✅ Phone number details fetched', [
+            'display_phone_number' => $displayPhoneNumber,
+        ]);
+
+        Log::info('✅ WhatsApp connection verified successfully', [
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
+            'phone_number' => $displayPhoneNumber,
+        ]);
+
+        return [
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
+            'phone_number' => $displayPhoneNumber,
+        ];
+    }
+
+    /**
      * Fetch WABA and phone number data using an access token.
      *
      * @return array{waba_id: string, phone_number_id: string, phone_number: string}

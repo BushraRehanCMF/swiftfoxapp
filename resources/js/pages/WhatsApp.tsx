@@ -152,6 +152,9 @@ const WhatsApp: React.FC = () => {
           if (popupUrl && popupUrl.startsWith(window.location.origin)) {
             const urlObj = new URL(popupUrl);
             const code = urlObj.searchParams.get('code');
+            const accessToken = urlObj.searchParams.get('access_token');
+            const wabaId = urlObj.searchParams.get('waba_id');
+            const phoneNumberId = urlObj.searchParams.get('phone_number_id');
             const error = urlObj.searchParams.get('error');
             window.clearInterval(poll);
             popup.close();
@@ -162,20 +165,37 @@ const WhatsApp: React.FC = () => {
               return;
             }
 
-            if (!code) {
+            // Embedded Signup can return either:
+            // 1. code (authorization code to exchange)
+            // 2. access_token + waba_id + phone_number_id (direct response)
+            if (!code && !accessToken) {
               setConnecting(false);
-              setError('Login failed. No authorization code received.');
+              setError('Login failed. No authorization code or access token received.');
               return;
             }
 
-            console.log('✅ Authorization code received');
+            console.log('✅ Authorization received', {
+              has_code: !!code,
+              has_access_token: !!accessToken,
+              has_waba_id: !!wabaId,
+              has_phone_number_id: !!phoneNumberId,
+            });
 
             try {
-              console.log('📤 Sending authorization code to /whatsapp/connect...');
-              const connectResponse = await api.post('/whatsapp/connect', {
-                code,
-                redirect_uri: redirectUri,
-              });
+              console.log('📤 Sending to /whatsapp/connect...');
+              const payload: any = { redirect_uri: redirectUri };
+
+              if (accessToken) {
+                // Use access_token directly (from Embedded Signup direct response)
+                payload.access_token = accessToken;
+                if (wabaId) payload.waba_id = wabaId;
+                if (phoneNumberId) payload.phone_number_id = phoneNumberId;
+              } else {
+                // Use authorization code (standard OAuth flow)
+                payload.code = code;
+              }
+
+              const connectResponse = await api.post('/whatsapp/connect', payload);
 
               console.log('✅ WhatsApp connection successful:', connectResponse.data);
               setNotice('WhatsApp connected successfully!');

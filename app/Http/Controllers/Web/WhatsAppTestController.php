@@ -32,12 +32,16 @@ class WhatsAppTestController extends Controller
             'method' => $request->method(),
             'has_code' => (bool) $request->input('code'),
             'has_access_token' => (bool) $request->input('access_token'),
+            'has_waba_id' => (bool) $request->input('waba_id'),
+            'has_phone_number_id' => (bool) $request->input('phone_number_id'),
             'has_redirect_uri' => (bool) $request->input('redirect_uri'),
         ]);
 
         $validator = Validator::make($request->all(), [
             'code' => ['sometimes', 'nullable', 'string'],
             'access_token' => ['sometimes', 'nullable', 'string'],
+            'waba_id' => ['sometimes', 'nullable', 'string'],
+            'phone_number_id' => ['sometimes', 'nullable', 'string'],
             'is_input_token' => ['sometimes', 'boolean'],
             'redirect_uri' => ['sometimes', 'nullable', 'string'],
         ]);
@@ -73,20 +77,36 @@ class WhatsAppTestController extends Controller
         $isInputToken = $validated['is_input_token'] ?? false;
         $redirectUri = $validated['redirect_uri'] ?? null;
         $accessToken = $validated['access_token'] ?? null;
+        $wabaId = $validated['waba_id'] ?? null;
+        $phoneNumberId = $validated['phone_number_id'] ?? null;
 
         try {
             \Log::info('WhatsApp test starting exchange', [
                 'token_type' => $accessToken ? 'access_token' : ($isInputToken ? 'input_token' : 'code'),
                 'has_redirect_uri' => (bool) $redirectUri,
+                'has_waba_id' => !!$wabaId,
+                'has_phone_number_id' => !!$phoneNumberId,
             ]);
 
-            $wabaData = $accessToken
-                ? $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken)
-                : $this->whatsAppService->exchangeCodeForWabaInfo(
+            // If waba_id and phone_number_id provided with access_token, verify access
+            if ($accessToken && $wabaId && $phoneNumberId) {
+                \Log::info('📋 WABA info provided directly, verifying with user token');
+                $wabaData = $this->whatsAppService->verifyAndFetchWabaInfo(
+                    $accessToken,
+                    $wabaId,
+                    $phoneNumberId
+                );
+            } elseif ($accessToken) {
+                // Only access_token provided
+                $wabaData = $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken);
+            } else {
+                // Authorization code provided
+                $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo(
                     $validated['code'],
                     $isInputToken,
                     $redirectUri
                 );
+            }
 
             \Log::info('WhatsApp test exchange success', [
                 'waba_id' => $wabaData['waba_id'] ?? null,

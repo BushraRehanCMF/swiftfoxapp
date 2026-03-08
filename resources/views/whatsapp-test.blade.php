@@ -60,6 +60,8 @@
         @csrf
         <input type="hidden" name="code" id="oauth-code" value="" />
         <input type="hidden" name="access_token" id="access-token" value="" />
+        <input type="hidden" name="waba_id" id="waba-id" value="" />
+        <input type="hidden" name="phone_number_id" id="phone-number-id" value="" />
         <input type="hidden" name="is_input_token" id="is-input-token" value="0" />
         <input type="hidden" name="redirect_uri" id="redirect-uri" value="" />
       </form>
@@ -113,6 +115,9 @@
               if (popupUrl && popupUrl.startsWith(window.location.origin)) {
                 const urlObj = new URL(popupUrl);
                 const code = urlObj.searchParams.get('code');
+                const accessToken = urlObj.searchParams.get('access_token');
+                const wabaId = urlObj.searchParams.get('waba_id');
+                const phoneNumberId = urlObj.searchParams.get('phone_number_id');
                 const error = urlObj.searchParams.get('error');
                 window.clearInterval(poll);
                 popup.close();
@@ -123,18 +128,28 @@
                   return;
                 }
 
-                if (!code) {
-                  log('No code received.');
+                // Embedded Signup can return either:
+                // 1. code (standard OAuth)
+                // 2. access_token + waba_id + phone_number_id (direct response)
+                if (!code && !accessToken) {
+                  log('No code or access_token received.');
                   connectBtn.disabled = false;
                   return;
                 }
 
-                document.getElementById('oauth-code').value = code;
-                document.getElementById('access-token').value = '';
+                // Populate form with received data
+                document.getElementById('oauth-code').value = code || '';
+                document.getElementById('access-token').value = accessToken || '';
+                document.getElementById('waba-id').value = wabaId || '';
+                document.getElementById('phone-number-id').value = phoneNumberId || '';
                 document.getElementById('is-input-token').value = '0';
                 document.getElementById('redirect-uri').value = window.location.href.split('#')[0].split('?')[0];
 
-                log('Code received. Submitting to server...');
+                log('Authorization received. Submitting to server...');
+                log('Has code: ' + !!code);
+                log('Has access_token: ' + !!accessToken);
+                log('Has waba_id: ' + !!wabaId);
+                log('Has phone_number_id: ' + !!phoneNumberId);
                 document.getElementById('connect-form').submit();
               }
             } catch (e) {
