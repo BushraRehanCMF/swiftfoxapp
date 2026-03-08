@@ -88,4 +88,15 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Demo Mode Settings
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, allows testing without requiring WhatsApp connection.
+    |
+    */
+
+    'demo_mode' => (bool) env('DEMO_MODE', false),
+
 ];

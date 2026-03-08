@@ -67,7 +67,8 @@ class EnsureCanSendMessages
         }
 
         // Check if WhatsApp is connected
-        if (!$account->hasWhatsappConnected()) {
+        // In demo mode, allow sending without connection
+        if (!config('swiftfox.demo_mode') && !$account->hasWhatsappConnected()) {
             return response()->json([
                 'error' => [
                     'code' => 'WHATSAPP_NOT_CONNECTED',

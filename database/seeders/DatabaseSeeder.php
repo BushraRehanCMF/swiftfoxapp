@@ -48,7 +48,9 @@ class DatabaseSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        $this->command->info('Database seeded successfully!');
+        // Seed demo data
+        $this->call(DemoSeeder::class);
+
         $this->command->info('');
         $this->command->info('Demo Accounts:');
         $this->command->info('  Super Admin: admin@swiftfox.cloud / password');
