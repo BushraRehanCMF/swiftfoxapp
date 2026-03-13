@@ -32,7 +32,6 @@ const WhatsApp: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [config, setConfig] = useState<EmbeddedConfig | null>(null);
-  const [sdkReady, setSdkReady] = useState(false);
 
   const hasConfig = useMemo(() => Boolean(config?.app_id && config?.config_id), [config]);
 
@@ -63,7 +62,7 @@ const WhatsApp: React.FC = () => {
   const ensureFacebookSdk = (appId: string) =>
     new Promise<void>((resolve, reject) => {
       if (window.FB) {
-        window.FB.init({ appId, xfbml: false, version: 'v25.0' });
+        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
         resolve();
         return;
       }
@@ -73,7 +72,7 @@ const WhatsApp: React.FC = () => {
         const checkReady = window.setInterval(() => {
           if (window.FB) {
             window.clearInterval(checkReady);
-            window.FB.init({ appId, xfbml: false, version: 'v25.0' });
+            window.FB.init({ appId, xfbml: false, version: 'v18.0' });
             resolve();
           }
         }, 50);
@@ -89,7 +88,7 @@ const WhatsApp: React.FC = () => {
           reject(new Error('Facebook SDK failed to initialize.'));
           return;
         }
-        window.FB.init({ appId, xfbml: false, version: 'v25.0' });
+        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
         resolve();
       };
 
@@ -107,141 +106,95 @@ const WhatsApp: React.FC = () => {
     setNotice('');
     setConnecting(true);
 
-    const currentConfig = config;
+    const currentConfig = config ?? (await fetchConfig());
     if (!currentConfig?.app_id || !currentConfig?.config_id) {
       setError('Missing Meta configuration. Set WHATSAPP_APP_ID and WHATSAPP_CONFIG_ID in your .env.');
       setConnecting(false);
       return;
     }
 
-    if (!window.FB) {
-      setError('Facebook SDK is still loading. Please wait 1-2 seconds and try again.');
-      setConnecting(false);
-      return;
-    }
-
-    // Handle state lag: SDK may be available even before sdkReady state updates.
-    if (!sdkReady) {
-      window.FB.init({ appId: currentConfig.app_id, xfbml: false, version: 'v25.0' });
-      setSdkReady(true);
-    }
-
     try {
-      // Capture waba_id and phone_number_id from Embedded Signup session info
-      let sessionWabaId: string | null = null;
-      let sessionPhoneNumberId: string | null = null;
+      const redirectUri = window.location.href.split('#')[0].split('?')[0];
+      const params = new URLSearchParams({
+        client_id: currentConfig.app_id,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'whatsapp_business_messaging,business_management,whatsapp_business_management',
+        display: 'popup',
+        config_id: currentConfig.config_id,
+      });
 
-      const sessionInfoListener = (event: MessageEvent) => {
-        if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
-        try {
-          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-          if (data.type === 'WA_EMBEDDED_SIGNUP') {
-            console.log('📩 WA_EMBEDDED_SIGNUP session info received:', data.data);
-            sessionWabaId = data.data?.waba_id || null;
-            sessionPhoneNumberId = data.data?.phone_number_id || null;
-          }
-        } catch {
-          // Not a JSON message, ignore
-        }
-      };
+      const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?${params.toString()}`;
 
-      window.addEventListener('message', sessionInfoListener);
+      console.log('Opening OAuth dialog:', oauthUrl);
+      console.log('Redirect URI:', redirectUri);
+
+      const popup = window.open(oauthUrl, 'wa_oauth', 'width=650,height=720');
+      if (!popup) {
+        setError('Popup blocked. Please allow popups and try again.');
+        setConnecting(false);
+        return;
+      }
 
       setNotice('Completing signup in the popup window...');
 
-      let loginCallbackCompleted = false;
-      const loginTimeout = window.setTimeout(() => {
-        if (loginCallbackCompleted) return;
-
-        window.removeEventListener('message', sessionInfoListener);
-        setConnecting(false);
-        setNotice('');
-        setError('Meta signup timed out. Please allow popups for this site and try again.');
-      }, 60000);
-
-      window.FB!.login(
-        (response: any) => {
-          void (async () => {
-          loginCallbackCompleted = true;
-          window.clearTimeout(loginTimeout);
-          window.removeEventListener('message', sessionInfoListener);
-
-          console.log('📥 FB.login response:', {
-            status: response.status,
-            has_authResponse: !!response.authResponse,
-            has_code: !!response.authResponse?.code,
-            has_accessToken: !!response.authResponse?.accessToken,
-            session_waba_id: sessionWabaId,
-            session_phone_number_id: sessionPhoneNumberId,
-          });
-
-          if (!response.authResponse) {
+      const poll = window.setInterval(async () => {
+        try {
+          if (popup.closed) {
+            window.clearInterval(poll);
             setConnecting(false);
             setNotice('');
-            setError('Login cancelled or failed.');
+            setError('Popup closed before completion.');
             return;
           }
 
-          const code = response.authResponse.code;
-          const accessToken = response.authResponse.accessToken;
+          const popupUrl = popup.location.href;
+          if (popupUrl && popupUrl.startsWith(window.location.origin)) {
+            const urlObj = new URL(popupUrl);
+            const code = urlObj.searchParams.get('code');
+            const error = urlObj.searchParams.get('error');
+            window.clearInterval(poll);
+            popup.close();
 
-          if (!code && !accessToken) {
-            setConnecting(false);
-            setNotice('');
-            setError('No authorization code or access token received from Meta.');
-            return;
-          }
-
-          if (!sessionWabaId || !sessionPhoneNumberId) {
-            setConnecting(false);
-            setNotice('');
-            setError('Embedded Signup did not return WABA or phone number info. Please try again.');
-            return;
-          }
-
-          try {
-            console.log('📤 Sending Embedded Signup data to /whatsapp/connect...');
-            const payload: Record<string, string> = {
-              waba_id: sessionWabaId,
-              phone_number_id: sessionPhoneNumberId,
-            };
-
-            if (code) {
-              payload.code = code;
-            } else if (accessToken) {
-              payload.access_token = accessToken;
+            if (error) {
+              setConnecting(false);
+              setError(`OAuth error: ${error}`);
+              return;
             }
 
-            const connectResponse = await api.post('/whatsapp/connect', payload);
+            if (!code) {
+              setConnecting(false);
+              setError('Login failed. No authorization code received.');
+              return;
+            }
 
-            console.log('✅ WhatsApp connection successful:', connectResponse.data);
-            setNotice('WhatsApp connected successfully!');
-            await fetchStatus();
-          } catch (err: any) {
-            console.error('❌ Connection failed:', err.response?.data || err.message);
-            setError(
-              err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
-            );
-          } finally {
-            setNotice('');
-            setConnecting(false);
+            console.log('✅ Authorization code received');
+
+            try {
+              console.log('📤 Sending authorization code to /whatsapp/connect...');
+              const connectResponse = await api.post('/whatsapp/connect', {
+                code,
+                redirect_uri: redirectUri,
+              });
+
+              console.log('✅ WhatsApp connection successful:', connectResponse.data);
+              setNotice('WhatsApp connected successfully!');
+              await fetchStatus();
+            } catch (err: any) {
+              console.error('❌ Connection failed:', err.response?.data || err.message);
+              setError(
+                err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
+              );
+            } finally {
+              setConnecting(false);
+            }
           }
-          })();
-        },
-        {
-          config_id: currentConfig.config_id,
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: {
-            setup: {},
-            featureType: '',
-            sessionInfoVersion: '3',
-          },
+        } catch (err) {
+          // wait for redirect to same origin
         }
-      );
+      }, 500);
     } catch (err: any) {
       setError(err.message || 'Unable to start Embedded Signup.');
-      setNotice('');
       setConnecting(false);
     }
   };
@@ -262,31 +215,6 @@ const WhatsApp: React.FC = () => {
     fetchStatus();
     fetchConfig();
   }, []);
-
-  useEffect(() => {
-    if (!config?.app_id) {
-      setSdkReady(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    ensureFacebookSdk(config.app_id)
-      .then(() => {
-        if (!cancelled) {
-          setSdkReady(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSdkReady(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [config?.app_id]);
 
   return (
     <div className="space-y-6">
@@ -355,11 +283,6 @@ const WhatsApp: React.FC = () => {
               {!hasConfig && (
                 <div className="text-xs text-gray-500 flex items-center">
                   Set WHATSAPP_APP_ID and WHATSAPP_CONFIG_ID to enable signup.
-                </div>
-              )}
-              {hasConfig && !sdkReady && (
-                <div className="text-xs text-gray-500 flex items-center">
-                  Loading Facebook SDK...
                 </div>
               )}
             </div>

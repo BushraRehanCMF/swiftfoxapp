@@ -54,16 +54,14 @@ class WhatsAppController extends Controller
             'user_id' => $request->user()->id,
             'account_id' => $request->user()->account->id,
             'has_code' => (bool) $request->input('code'),
-            'has_access_token' => (bool) $request->input('access_token'),
-            'has_waba_id' => (bool) $request->input('waba_id'),
-            'has_phone_number_id' => (bool) $request->input('phone_number_id'),
+            'is_input_token' => (bool) $request->input('is_input_token'),
         ]);
 
         $validated = $request->validate([
             'code' => ['sometimes', 'nullable', 'string'],
             'access_token' => ['sometimes', 'nullable', 'string'],
-            'waba_id' => ['required', 'string'],
-            'phone_number_id' => ['required', 'string'],
+            'is_input_token' => ['sometimes', 'boolean'],
+            'redirect_uri' => ['sometimes', 'nullable', 'string'],
         ]);
 
         if (empty($validated['code']) && empty($validated['access_token'])) {
@@ -78,13 +76,14 @@ class WhatsAppController extends Controller
         $account = $request->user()->account;
         $code = $validated['code'] ?? null;
         $accessToken = $validated['access_token'] ?? null;
-        $wabaId = $validated['waba_id'];
-        $phoneNumberId = $validated['phone_number_id'];
+        $isInputToken = $validated['is_input_token'] ?? false;
+        $redirectUri = $validated['redirect_uri'] ?? null;
 
         \Log::info('✅ Request validated', [
-            'token_type' => $accessToken ? 'access_token' : 'authorization_code',
-            'waba_id' => $wabaId,
-            'phone_number_id' => $phoneNumberId,
+            'token_type' => $accessToken ? 'access_token' : ($isInputToken ? 'input_token (JWT)' : 'authorization_code'),
+            'code_preview' => $code ? substr($code, 0, 30) . '...' : null,
+            'access_token_preview' => $accessToken ? substr($accessToken, 0, 30) . '...' : null,
+            'redirect_uri' => $redirectUri,
         ]);
 
         $existingConnection = $account->whatsappConnection;
@@ -104,22 +103,17 @@ class WhatsAppController extends Controller
         }
 
         try {
-            // If code is provided, exchange it for an access token first
-            if ($code) {
-                \Log::info('🔄 Exchanging code for access token');
-                $accessToken = $this->whatsAppService->exchangeCodeForAccessToken($code);
-            }
+            \Log::info('🔄 Starting authorization exchange with WhatsAppService');
+            // Exchange authorization code/input_token for WABA information
+            $wabaData = $accessToken
+                ? $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken)
+                : $this->whatsAppService->exchangeCodeForWabaInfo(
+                    $code,
+                    $isInputToken,
+                    $redirectUri
+                );
 
-            // Trust waba_id and phone_number_id from Embedded Signup,
-            // just fetch the display phone number
-            \Log::info('📋 Processing Embedded Signup result');
-            $wabaData = $this->whatsAppService->processEmbeddedSignup(
-                $accessToken,
-                $wabaId,
-                $phoneNumberId
-            );
-
-            \Log::info('✅ Embedded Signup processed, creating WhatsappConnection', [
+            \Log::info('✅ Authorization exchange successful, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],
                 'phone_number' => $wabaData['phone_number'],
             ]);
@@ -128,6 +122,7 @@ class WhatsAppController extends Controller
                 'waba_id' => $wabaData['waba_id'],
                 'phone_number_id' => $wabaData['phone_number_id'],
                 'phone_number' => $wabaData['phone_number'],
+                'access_token' => $wabaData['access_token'],
                 'status' => WhatsappConnection::STATUS_ACTIVE,
             ];
 

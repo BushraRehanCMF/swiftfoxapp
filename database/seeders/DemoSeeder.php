@@ -62,6 +62,7 @@ class DemoSeeder extends Seeder
             'waba_id' => '123456789012345',
             'phone_number_id' => '987654321098765',
             'phone_number' => '+1 (555) 123-4567',
+            'access_token' => 'demo_access_token',
             'status' => WhatsappConnection::STATUS_ACTIVE,
         ]);
     }

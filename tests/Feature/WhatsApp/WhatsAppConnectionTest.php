@@ -58,11 +58,23 @@ class WhatsAppConnectionTest extends TestCase
 
     public function test_owner_can_connect_whatsapp(): void
     {
-        $response = $this->actingAs($this->owner)
-            ->postJson('/api/v1/whatsapp/connect', [
+        $mock = Mockery::mock(WhatsAppService::class);
+        $mock->shouldReceive('exchangeCodeForWabaInfo')
+            ->once()
+            ->with('test_auth_code', false, 'https://example.com/whatsapp')
+            ->andReturn([
                 'waba_id' => '123456789012345',
                 'phone_number_id' => '109876543210987',
                 'phone_number' => '+1234567890',
+                'access_token' => 'test_user_access_token',
+            ]);
+
+        $this->instance(WhatsAppService::class, $mock);
+
+        $response = $this->actingAs($this->owner)
+            ->postJson('/api/v1/whatsapp/connect', [
+                'code' => 'test_auth_code',
+                'redirect_uri' => 'https://example.com/whatsapp',
             ]);
 
         $response->assertStatus(201)
@@ -84,9 +96,8 @@ class WhatsAppConnectionTest extends TestCase
 
         $response = $this->actingAs($this->owner)
             ->postJson('/api/v1/whatsapp/connect', [
-                'waba_id' => '123456789012345',
-                'phone_number_id' => '109876543210987',
-                'phone_number' => '+1234567890',
+                'code' => 'test_auth_code',
+                'redirect_uri' => 'https://example.com/whatsapp',
             ]);
 
         $response->assertStatus(409)
@@ -122,13 +133,14 @@ class WhatsAppConnectionTest extends TestCase
         ]);
 
         $mock = Mockery::mock(WhatsAppService::class);
-        $mock->shouldReceive('processEmbeddedSignup')
+        $mock->shouldReceive('exchangeAccessTokenForWabaInfo')
             ->once()
-            ->with('test_access_token', 'new_waba', 'new_phone_number_id')
+            ->with('test_access_token')
             ->andReturn([
                 'waba_id' => 'new_waba',
                 'phone_number_id' => 'new_phone_number_id',
                 'phone_number' => '+19999999999',
+                'access_token' => 'test_access_token',
             ]);
 
         $this->instance(WhatsAppService::class, $mock);
@@ -136,8 +148,6 @@ class WhatsAppConnectionTest extends TestCase
         $response = $this->actingAs($this->owner)
             ->postJson('/api/v1/whatsapp/connect', [
                 'access_token' => 'test_access_token',
-                'waba_id' => 'new_waba',
-                'phone_number_id' => 'new_phone_number_id',
             ]);
 
         $response->assertStatus(201)

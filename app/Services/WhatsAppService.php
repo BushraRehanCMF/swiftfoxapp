@@ -13,7 +13,7 @@ class WhatsAppService
 
     public function __construct()
     {
-        $this->apiVersion = config('swiftfox.whatsapp.api_version', 'v25.0');
+        $this->apiVersion = config('swiftfox.whatsapp.api_version', 'v18.0');
         $this->apiUrl = config('swiftfox.whatsapp.api_url', 'https://graph.facebook.com');
     }
 
@@ -34,7 +34,7 @@ class WhatsAppService
             throw new \Exception('No WhatsApp connection found.');
         }
 
-        $accessToken = config('swiftfox.whatsapp.access_token');
+        $accessToken = $connection->access_token;
 
         if (!$accessToken) {
             // For development/testing, simulate success
@@ -43,7 +43,7 @@ class WhatsAppService
                     'message_id' => 'wamid_' . uniqid(),
                 ];
             }
-            throw new \Exception('WhatsApp access token not configured.');
+            throw new \Exception('No access token stored for this WhatsApp connection.');
         }
 
         $url = "{$this->apiUrl}/{$this->apiVersion}/{$connection->phone_number_id}/messages";
@@ -98,19 +98,27 @@ class WhatsAppService
     }
 
     /**
-     * Exchange authorization code from Meta Embedded Signup for an access token.
+     * Exchange authorization code/input_token from Meta Embedded Signup for WABA info.
      *
+     * For Embedded Signup:
+     * - If input_token (JWT) is provided, use it directly to fetch WABA info
+     * - If code is provided, exchange it for access token first (standard OAuth)
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
      * @throws \Exception
      */
-    public function exchangeCodeForAccessToken(
+    public function exchangeCodeForWabaInfo(
         string $code,
+        bool $isInputToken = false,
         ?string $redirectUriOverride = null
-    ): string {
+    ): array
+    {
         $appId = config('swiftfox.whatsapp.app_id');
         $appSecret = config('swiftfox.whatsapp.app_secret');
 
-        Log::info('🔄 Starting code → access_token exchange', [
-            'code_preview' => substr($code, 0, 30) . '...',
+        Log::info('🔄 Starting authorization exchange', [
+            'token_type' => $isInputToken ? 'input_token (JWT)' : 'authorization_code',
+            'token_preview' => substr($code, 0, 30) . '...',
         ]);
 
         if (!$appId || !$appSecret) {
@@ -121,108 +129,225 @@ class WhatsAppService
             throw new \Exception('Missing WHATSAPP_APP_ID or WHATSAPP_APP_SECRET configuration.');
         }
 
-        $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
-        $redirectUri = $redirectUriOverride
-            ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
+        $accessToken = $code; // Start with the token provided
 
-        Log::info('📤 Exchanging authorization code for access token', [
-            'redirect_uri' => $redirectUri,
-            'client_id' => $appId,
-        ]);
+        // If it's an authorization code, exchange it for an access token first
+        if (!$isInputToken) {
+            $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
+            $redirectUri = $redirectUriOverride
+                ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
 
-        $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', [
-            'client_id' => $appId,
-            'client_secret' => $appSecret,
-            'code' => $code,
-            'grant_type' => 'authorization_code',
-            'redirect_uri' => $redirectUri,
-        ]);
-
-        Log::info('📥 Token exchange response', [
-            'status' => $tokenResponse->status(),
-            'is_successful' => $tokenResponse->successful(),
-            'response_keys' => array_keys($tokenResponse->json() ?? []),
-        ]);
-
-        if (!$tokenResponse->successful()) {
-            $errorData = $tokenResponse->json();
-            Log::error('❌ Code exchange failed', [
-                'status' => $tokenResponse->status(),
-                'error_response' => $errorData,
+            Log::info('WhatsApp OAuth Debug', [
+                'code_preview' => substr($code, 0, 30) . '...',
+                'redirect_uri_being_sent' => $redirectUri,
+                'client_id' => $appId,
             ]);
-            throw new \Exception('Failed to exchange code: ' . ($errorData['error']['message'] ?? $errorData['error'] ?? 'Unknown error'));
+
+            Log::info('📤 Exchanging authorization code for access token', [
+                'endpoint' => 'https://graph.facebook.com/v22.0/oauth/access_token',
+                'redirect_uri' => $redirectUri,
+            ]);
+
+            $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', [
+                'client_id' => $appId,
+                'client_secret' => $appSecret,
+                'code' => $code,
+                'grant_type' => 'authorization_code',
+                'redirect_uri' => $redirectUri,
+            ]);
+
+            Log::info('Token Response', [
+                'status' => $tokenResponse->status(),
+                'body' => $tokenResponse->json(),
+            ]);
+
+            Log::info('📥 Token exchange response', [
+                'status' => $tokenResponse->status(),
+                'is_successful' => $tokenResponse->successful(),
+                'response_keys' => array_keys($tokenResponse->json()),
+            ]);
+
+            if (!$tokenResponse->successful()) {
+                $errorData = $tokenResponse->json();
+                Log::error('❌ Code exchange failed', [
+                    'status' => $tokenResponse->status(),
+                    'error_response' => $errorData,
+                    'error_message' => $errorData['error']['message'] ?? ($errorData['error'] ?? 'Unknown error'),
+                ]);
+                throw new \Exception('Failed to exchange code: ' . ($errorData['error']['message'] ?? $errorData['error'] ?? 'Unknown error'));
+            }
+
+            $tokenData = $tokenResponse->json();
+            $accessToken = $tokenData['access_token'] ?? null;
+
+            if (!$accessToken) {
+                Log::error('❌ No access token in response', ['response' => $tokenData]);
+                throw new \Exception('No access token returned from Meta.');
+            }
+
+            Log::info('✅ Access token obtained', [
+                'token_preview' => substr($accessToken, 0, 30) . '...',
+            ]);
+        } else {
+            Log::info('✅ Using input_token directly (JWT from Embedded Signup)', [
+                'token_preview' => substr($code, 0, 30) . '...',
+            ]);
         }
 
-        $tokenData = $tokenResponse->json();
-        $accessToken = $tokenData['access_token'] ?? null;
-
-        if (!$accessToken) {
-            Log::error('❌ No access token in response', ['response' => $tokenData]);
-            throw new \Exception('No access token returned from Meta.');
-        }
-
-        Log::info('✅ Access token obtained', [
-            'token_preview' => substr($accessToken, 0, 30) . '...',
-        ]);
-
-        return $accessToken;
+        return $this->fetchWabaInfoWithAccessToken($accessToken);
     }
 
     /**
-     * Process Embedded Signup result.
+     * Exchange a user access token for WABA info.
      *
-     * After Embedded Signup, Meta returns waba_id + phone_number_id directly via the JS SDK.
-     * We trust those values (Meta already assigned our app to the WABA).
-     * We only fetch the display phone number for storage.
-     *
-     * @return array{waba_id: string, phone_number_id: string, phone_number: string}
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
      * @throws \Exception
      */
-    public function processEmbeddedSignup(
-        string $accessToken,
-        string $wabaId,
-        string $phoneNumberId
-    ): array {
-        Log::info('📋 Processing Embedded Signup result', [
+    public function exchangeAccessTokenForWabaInfo(string $accessToken): array
+    {
+        Log::info('🔄 Using access token directly for WABA lookup', [
             'token_preview' => substr($accessToken, 0, 30) . '...',
-            'waba_id' => $wabaId,
-            'phone_number_id' => $phoneNumberId,
         ]);
 
-        // Fetch the display phone number using the user's access token
-        Log::info('📤 Fetching display phone number', ['phone_number_id' => $phoneNumberId]);
+        return $this->fetchWabaInfoWithAccessToken($accessToken);
+    }
 
-        $phoneResponse = Http::withToken($accessToken)->get(
-            "{$this->apiUrl}/v22.0/{$phoneNumberId}",
-            ['fields' => 'id,display_phone_number,verified_name']
+    /**
+     * Fetch WABA and phone number data using an access token.
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
+     * @throws \Exception
+     */
+    protected function fetchWabaInfoWithAccessToken(string $accessToken): array
+    {
+        // Step 2: Get businesses linked to the user
+        Log::info('📤 Fetching businesses for user from Meta');
+        $meResponse = Http::withToken($accessToken)->get(
+            "{$this->apiUrl}/v22.0/me",
+            ['fields' => 'id,name,businesses']
         );
 
-        Log::info('📥 Phone number response', [
-            'status' => $phoneResponse->status(),
-            'is_successful' => $phoneResponse->successful(),
-            'body' => $phoneResponse->json(),
+        Log::info('📥 WABA info response', [
+            'status' => $meResponse->status(),
+            'is_successful' => $meResponse->successful(),
+            'response_keys' => array_keys($meResponse->json()),
         ]);
 
-        $displayPhoneNumber = $phoneNumberId; // fallback
-
-        if ($phoneResponse->successful()) {
-            $phoneData = $phoneResponse->json();
-            $displayPhoneNumber = $phoneData['display_phone_number'] ?? $phoneNumberId;
-            Log::info('✅ Display phone number fetched', [
-                'display_phone_number' => $displayPhoneNumber,
-                'verified_name' => $phoneData['verified_name'] ?? null,
+        if (!$meResponse->successful()) {
+            $errorData = $meResponse->json();
+            Log::error('❌ Failed to fetch WABA info', [
+                'status' => $meResponse->status(),
+                'error_response' => $errorData,
             ]);
-        } else {
-            // Non-fatal: we still have phone_number_id which is enough to send messages
-            Log::warning('⚠️ Could not fetch display phone number, using phone_number_id as fallback', [
-                'status' => $phoneResponse->status(),
-                'error' => $phoneResponse->json()['error'] ?? null,
-            ]);
+            throw new \Exception('Failed to fetch WABA information: ' . ($errorData['error']['message'] ?? 'Unknown error'));
         }
 
-        Log::info('✅ Embedded Signup processed successfully', [
+        $meData = $meResponse->json();
+        $businesses = $meData['businesses']['data'] ?? [];
+        $businessId = $businesses[0]['id'] ?? null;
+
+        Log::info('✅ Business ID extracted', [
+            'business_id' => $businessId,
+        ]);
+
+        if (!$businessId) {
+            Log::error('❌ Business ID not found', ['response' => $meData]);
+            throw new \Exception('Business ID not found. Ensure the user has access to a Business Manager.');
+        }
+
+        // Step 3: Get WABA accounts owned by the business
+        Log::info('📤 Fetching owned WhatsApp Business Accounts', [
+            'business_id' => $businessId,
+        ]);
+        $wabaResponse = Http::withToken($accessToken)->get(
+            "{$this->apiUrl}/v22.0/{$businessId}/owned_whatsapp_business_accounts",
+            ['fields' => 'id,name']
+        );
+
+        Log::info('📥 WABA list response', [
+            'status' => $wabaResponse->status(),
+            'is_successful' => $wabaResponse->successful(),
+        ]);
+
+        if (!$wabaResponse->successful()) {
+            $errorData = $wabaResponse->json();
+            Log::error('❌ Failed to fetch WABA list', [
+                'status' => $wabaResponse->status(),
+                'error_response' => $errorData,
+            ]);
+            throw new \Exception('Failed to fetch WABA list: ' . ($errorData['error']['message'] ?? 'Unknown error'));
+        }
+
+        $wabaList = $wabaResponse->json();
+        $wabaData = $wabaList['data'] ?? [];
+        $wabaId = $wabaData[0]['id'] ?? null;
+
+        Log::info('✅ WABA ID extracted', [
             'waba_id' => $wabaId,
+        ]);
+
+        if (!$wabaId) {
+            Log::error('❌ WABA ID not found', ['response' => $wabaList ?? $meData]);
+            throw new \Exception('WABA ID not found. Ensure the business has a WhatsApp Business Account.');
+        }
+
+        // Step 4: Get phone numbers for this WABA
+        Log::info('📤 Fetching phone numbers for WABA', ['waba_id' => $wabaId]);
+        $phoneResponse = Http::withToken($accessToken)->get(
+            "{$this->apiUrl}/v22.0/{$wabaId}/phone_numbers",
+            ['fields' => 'id,display_phone_number,phone_number_id,verified_name']
+        );
+
+        Log::info('📥 Phone numbers response', [
+            'status' => $phoneResponse->status(),
+            'is_successful' => $phoneResponse->successful(),
+        ]);
+
+        if (!$phoneResponse->successful()) {
+            $errorData = $phoneResponse->json();
+            Log::error('❌ Failed to fetch phone numbers', [
+                'status' => $phoneResponse->status(),
+                'error_response' => $errorData,
+            ]);
+            throw new \Exception('Failed to fetch phone numbers: ' . ($errorData['error']['message'] ?? 'Unknown error'));
+        }
+
+        $phoneData = $phoneResponse->json();
+        $phoneNumbers = $phoneData['data'] ?? [];
+
+        Log::info('📥 Phone numbers extracted', [
+            'count' => count($phoneNumbers),
+        ]);
+
+        if (empty($phoneNumbers)) {
+            Log::error('❌ No phone numbers found', ['waba_id' => $wabaId]);
+            throw new \Exception('No phone numbers found. Please add a phone number in Business Manager.');
+        }
+
+        // Use the first valid phone number
+        $phoneNumber = null;
+        foreach ($phoneNumbers as $p) {
+            if (!empty($p['phone_number_id']) && !empty($p['display_phone_number'])) {
+                $phoneNumber = $p;
+                break;
+            }
+        }
+
+        if (!$phoneNumber) {
+            Log::error('❌ No valid phone number found', ['phone_numbers' => $phoneNumbers]);
+            throw new \Exception('No valid phone number found in WhatsApp Business Account.');
+        }
+
+        $phoneNumberId = $phoneNumber['phone_number_id'];
+        $displayPhoneNumber = $phoneNumber['display_phone_number'];
+
+        Log::info('✅ Phone number selected', [
+            'display_phone_number' => $displayPhoneNumber,
             'phone_number_id' => $phoneNumberId,
+        ]);
+
+        Log::info('✅ WhatsApp connection established successfully', [
+            'waba_id' => $wabaId,
             'phone_number' => $displayPhoneNumber,
         ]);
 
@@ -230,6 +355,7 @@ class WhatsAppService
             'waba_id' => $wabaId,
             'phone_number_id' => $phoneNumberId,
             'phone_number' => $displayPhoneNumber,
+            'access_token' => $accessToken,
         ];
     }
 

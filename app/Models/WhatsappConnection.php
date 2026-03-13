@@ -26,7 +26,29 @@ class WhatsappConnection extends Model
         'waba_id',
         'phone_number_id',
         'phone_number',
+        'access_token',
         'status',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'access_token' => 'encrypted',
+        ];
+    }
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'access_token',
     ];
 
     /**

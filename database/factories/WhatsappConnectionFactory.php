@@ -28,6 +28,7 @@ class WhatsappConnectionFactory extends Factory
             'waba_id' => fake()->numerify('###############'),
             'phone_number_id' => fake()->numerify('###############'),
             'phone_number' => fake()->e164PhoneNumber(),
+            'access_token' => 'fake_access_token_' . fake()->sha256(),
             'status' => WhatsappConnection::STATUS_ACTIVE,
         ];
     }
