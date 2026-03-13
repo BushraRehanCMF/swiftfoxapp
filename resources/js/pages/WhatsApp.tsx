@@ -233,7 +233,8 @@ const WhatsApp: React.FC = () => {
           response_type: 'code',
           override_default_response_type: true,
           extras: {
-            feature: 'whatsapp_embedded_signup',
+            setup: {},
+            featureType: '',
             sessionInfoVersion: '3',
           },
         }
