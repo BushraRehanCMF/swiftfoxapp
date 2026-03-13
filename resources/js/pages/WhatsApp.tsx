@@ -63,7 +63,7 @@ const WhatsApp: React.FC = () => {
   const ensureFacebookSdk = (appId: string) =>
     new Promise<void>((resolve, reject) => {
       if (window.FB) {
-        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+        window.FB.init({ appId, xfbml: false, version: 'v25.0' });
         resolve();
         return;
       }
@@ -73,7 +73,7 @@ const WhatsApp: React.FC = () => {
         const checkReady = window.setInterval(() => {
           if (window.FB) {
             window.clearInterval(checkReady);
-            window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+            window.FB.init({ appId, xfbml: false, version: 'v25.0' });
             resolve();
           }
         }, 50);
@@ -89,7 +89,7 @@ const WhatsApp: React.FC = () => {
           reject(new Error('Facebook SDK failed to initialize.'));
           return;
         }
-        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+        window.FB.init({ appId, xfbml: false, version: 'v25.0' });
         resolve();
       };
 
@@ -114,10 +114,16 @@ const WhatsApp: React.FC = () => {
       return;
     }
 
-    if (!window.FB || !sdkReady) {
+    if (!window.FB) {
       setError('Facebook SDK is still loading. Please wait 1-2 seconds and try again.');
       setConnecting(false);
       return;
+    }
+
+    // Handle state lag: SDK may be available even before sdkReady state updates.
+    if (!sdkReady) {
+      window.FB.init({ appId: currentConfig.app_id, xfbml: false, version: 'v25.0' });
+      setSdkReady(true);
     }
 
     try {
@@ -340,7 +346,7 @@ const WhatsApp: React.FC = () => {
               <button
                 type="button"
                 onClick={startEmbeddedSignup}
-                disabled={!hasConfig || !sdkReady || connecting}
+                disabled={!hasConfig || connecting}
                 className="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
               >
                 {connecting ? 'Starting signup...' : 'Connect with Meta'}

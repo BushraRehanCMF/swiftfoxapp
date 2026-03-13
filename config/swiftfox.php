@@ -26,7 +26,7 @@ return [
     */
 
     'whatsapp' => [
-        'api_version' => env('WHATSAPP_API_VERSION', 'v18.0'),
+        'api_version' => env('WHATSAPP_API_VERSION', 'v25.0'),
         'api_url' => 'https://graph.facebook.com',
         'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
         'app_id' => env('WHATSAPP_APP_ID'),

@@ -13,7 +13,7 @@ class WhatsAppService
 
     public function __construct()
     {
-        $this->apiVersion = config('swiftfox.whatsapp.api_version', 'v18.0');
+        $this->apiVersion = config('swiftfox.whatsapp.api_version', 'v25.0');
         $this->apiUrl = config('swiftfox.whatsapp.api_url', 'https://graph.facebook.com');
     }
 
