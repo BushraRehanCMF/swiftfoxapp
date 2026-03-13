@@ -5,7 +5,9 @@ namespace Tests\Feature\WhatsApp;
 use App\Models\Account;
 use App\Models\User;
 use App\Models\WhatsappConnection;
+use App\Services\WhatsAppService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 class WhatsAppConnectionTest extends TestCase
@@ -106,6 +108,50 @@ class WhatsAppConnectionTest extends TestCase
         $this->assertDatabaseHas('whatsapp_connections', [
             'id' => $connection->id,
             'status' => 'disconnected',
+        ]);
+    }
+
+    public function test_owner_can_reconnect_when_connection_is_disconnected(): void
+    {
+        $connection = WhatsappConnection::factory()->create([
+            'account_id' => $this->account->id,
+            'waba_id' => 'old_waba',
+            'phone_number_id' => 'old_phone_number_id',
+            'phone_number' => '+10000000000',
+            'status' => WhatsappConnection::STATUS_DISCONNECTED,
+        ]);
+
+        $mock = Mockery::mock(WhatsAppService::class);
+        $mock->shouldReceive('processEmbeddedSignup')
+            ->once()
+            ->with('test_access_token', 'new_waba', 'new_phone_number_id')
+            ->andReturn([
+                'waba_id' => 'new_waba',
+                'phone_number_id' => 'new_phone_number_id',
+                'phone_number' => '+19999999999',
+            ]);
+
+        $this->instance(WhatsAppService::class, $mock);
+
+        $response = $this->actingAs($this->owner)
+            ->postJson('/api/v1/whatsapp/connect', [
+                'access_token' => 'test_access_token',
+                'waba_id' => 'new_waba',
+                'phone_number_id' => 'new_phone_number_id',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.connected', true)
+            ->assertJsonPath('data.waba_id', 'new_waba')
+            ->assertJsonPath('data.phone_number_id', 'new_phone_number_id');
+
+        $this->assertDatabaseHas('whatsapp_connections', [
+            'id' => $connection->id,
+            'account_id' => $this->account->id,
+            'waba_id' => 'new_waba',
+            'phone_number_id' => 'new_phone_number_id',
+            'phone_number' => '+19999999999',
+            'status' => WhatsappConnection::STATUS_ACTIVE,
         ]);
     }
 

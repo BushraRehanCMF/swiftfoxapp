@@ -62,8 +62,6 @@
         <input type="hidden" name="access_token" id="access-token" value="" />
         <input type="hidden" name="waba_id" id="waba-id" value="" />
         <input type="hidden" name="phone_number_id" id="phone-number-id" value="" />
-        <input type="hidden" name="is_input_token" id="is-input-token" value="0" />
-        <input type="hidden" name="redirect_uri" id="redirect-uri" value="" />
       </form>
 
       <div class="row box">
@@ -74,6 +72,7 @@
 
     <script>
       const appId = "{{ $appId }}";
+      const configId = "{{ $configId }}";
       const connectBtn = document.getElementById('connect-btn');
       const logEl = document.getElementById('client-log');
 
@@ -81,90 +80,99 @@
         logEl.textContent += message + "\n";
       }
 
-        function buildOauthUrl() {
-          const redirectUri = window.location.href.split('#')[0].split('?')[0];
-          const params = new URLSearchParams({
-            client_id: appId,
-            redirect_uri: redirectUri,
-            response_type: 'code',
-            scope: 'whatsapp_business_messaging,business_management',
-            display: 'popup'
-          });
-          return `https://www.facebook.com/v22.0/dialog/oauth?${params.toString()}`;
-        }
+      // Load Facebook JS SDK
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId: appId,
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v22.0'
+        });
+        log('Facebook SDK initialized.');
+      };
 
-        function openOauthPopup() {
-          const url = buildOauthUrl();
-          log('Opening OAuth dialog...');
-          log('Redirect URI: ' + window.location.href.split('#')[0].split('?')[0]);
-          const popup = window.open(url, 'wa_oauth', 'width=650,height=720');
-          if (!popup) {
-            throw new Error('Popup blocked. Please allow popups and try again.');
+      (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "https://connect.facebook.net/en_US/sdk.js";
+        fjs.parentNode.insertBefore(js, fjs);
+      }(document, 'script', 'facebook-jssdk'));
+
+      // Session info listener for Embedded Signup
+      let capturedWabaId = null;
+      let capturedPhoneNumberId = null;
+
+      window.addEventListener('message', function(event) {
+        if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+        try {
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (data.type === 'WA_EMBEDDED_SIGNUP') {
+            log('📩 WA_EMBEDDED_SIGNUP event received');
+            log('  waba_id: ' + (data.data?.waba_id || 'N/A'));
+            log('  phone_number_id: ' + (data.data?.phone_number_id || 'N/A'));
+            log('  current_step: ' + (data.data?.current_step || 'N/A'));
+            capturedWabaId = data.data?.waba_id || null;
+            capturedPhoneNumberId = data.data?.phone_number_id || null;
           }
-
-          const poll = window.setInterval(() => {
-            try {
-              if (popup.closed) {
-                window.clearInterval(poll);
-                connectBtn.disabled = false;
-                log('Popup closed before completion.');
-                return;
-              }
-
-              const popupUrl = popup.location.href;
-              if (popupUrl && popupUrl.startsWith(window.location.origin)) {
-                const urlObj = new URL(popupUrl);
-                const code = urlObj.searchParams.get('code');
-                const accessToken = urlObj.searchParams.get('access_token');
-                const wabaId = urlObj.searchParams.get('waba_id');
-                const phoneNumberId = urlObj.searchParams.get('phone_number_id');
-                const error = urlObj.searchParams.get('error');
-                window.clearInterval(poll);
-                popup.close();
-
-                if (error) {
-                  log('OAuth error: ' + error);
-                  connectBtn.disabled = false;
-                  return;
-                }
-
-                // Embedded Signup can return either:
-                // 1. code (standard OAuth)
-                // 2. access_token + waba_id + phone_number_id (direct response)
-                if (!code && !accessToken) {
-                  log('No code or access_token received.');
-                  connectBtn.disabled = false;
-                  return;
-                }
-
-                // Populate form with received data
-                document.getElementById('oauth-code').value = code || '';
-                document.getElementById('access-token').value = accessToken || '';
-                document.getElementById('waba-id').value = wabaId || '';
-                document.getElementById('phone-number-id').value = phoneNumberId || '';
-                document.getElementById('is-input-token').value = '0';
-                document.getElementById('redirect-uri').value = window.location.href.split('#')[0].split('?')[0];
-
-                log('Authorization received. Submitting to server...');
-                log('Has code: ' + !!code);
-                log('Has access_token: ' + !!accessToken);
-                log('Has waba_id: ' + !!wabaId);
-                log('Has phone_number_id: ' + !!phoneNumberId);
-                document.getElementById('connect-form').submit();
-              }
-            } catch (e) {
-              // Wait for redirect to same origin
-            }
-          }, 500);
+        } catch (e) {
+          // Not a JSON message, ignore
         }
+      });
 
       connectBtn.addEventListener('click', () => {
         connectBtn.disabled = true;
-        try {
-          openOauthPopup();
-        } catch (err) {
-          log('Error: ' + (err.message || 'Unknown error'));
+        capturedWabaId = null;
+        capturedPhoneNumberId = null;
+
+        if (typeof FB === 'undefined') {
+          log('Error: Facebook SDK not loaded yet. Please wait and try again.');
           connectBtn.disabled = false;
+          return;
         }
+
+        log('Opening Embedded Signup via FB.login...');
+        log('config_id: ' + configId);
+
+        FB.login(function(response) {
+          log('FB.login callback received.');
+          log('Status: ' + response.status);
+
+          if (response.authResponse) {
+            const code = response.authResponse.code || '';
+            const accessToken = response.authResponse.accessToken || '';
+
+            log('Has code: ' + !!code);
+            log('Has accessToken: ' + !!accessToken);
+            log('Captured waba_id: ' + (capturedWabaId || 'N/A'));
+            log('Captured phone_number_id: ' + (capturedPhoneNumberId || 'N/A'));
+
+            if (!capturedWabaId || !capturedPhoneNumberId) {
+              log('⚠️  Missing waba_id or phone_number_id from session info. Cannot proceed.');
+              connectBtn.disabled = false;
+              return;
+            }
+
+            document.getElementById('oauth-code').value = code;
+            document.getElementById('access-token').value = accessToken;
+            document.getElementById('waba-id').value = capturedWabaId;
+            document.getElementById('phone-number-id').value = capturedPhoneNumberId;
+
+            log('Submitting to server...');
+            document.getElementById('connect-form').submit();
+          } else {
+            log('Login cancelled or failed.');
+            connectBtn.disabled = false;
+          }
+        }, {
+          config_id: configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: '',
+            sessionInfoVersion: '3',
+          }
+        });
       });
     </script>

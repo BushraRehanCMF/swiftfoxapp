@@ -54,16 +54,16 @@ class WhatsAppController extends Controller
             'user_id' => $request->user()->id,
             'account_id' => $request->user()->account->id,
             'has_code' => (bool) $request->input('code'),
-            'is_input_token' => (bool) $request->input('is_input_token'),
+            'has_access_token' => (bool) $request->input('access_token'),
+            'has_waba_id' => (bool) $request->input('waba_id'),
+            'has_phone_number_id' => (bool) $request->input('phone_number_id'),
         ]);
 
         $validated = $request->validate([
             'code' => ['sometimes', 'nullable', 'string'],
             'access_token' => ['sometimes', 'nullable', 'string'],
-            'waba_id' => ['sometimes', 'nullable', 'string'],
-            'phone_number_id' => ['sometimes', 'nullable', 'string'],
-            'is_input_token' => ['sometimes', 'boolean'],
-            'redirect_uri' => ['sometimes', 'nullable', 'string'],
+            'waba_id' => ['required', 'string'],
+            'phone_number_id' => ['required', 'string'],
         ]);
 
         if (empty($validated['code']) && empty($validated['access_token'])) {
@@ -78,25 +78,22 @@ class WhatsAppController extends Controller
         $account = $request->user()->account;
         $code = $validated['code'] ?? null;
         $accessToken = $validated['access_token'] ?? null;
-        $wabaId = $validated['waba_id'] ?? null;
-        $phoneNumberId = $validated['phone_number_id'] ?? null;
-        $isInputToken = $validated['is_input_token'] ?? false;
-        $redirectUri = $validated['redirect_uri'] ?? null;
+        $wabaId = $validated['waba_id'];
+        $phoneNumberId = $validated['phone_number_id'];
 
         \Log::info('✅ Request validated', [
-            'token_type' => $accessToken ? 'access_token' : ($isInputToken ? 'input_token (JWT)' : 'authorization_code'),
-            'code_preview' => $code ? substr($code, 0, 30) . '...' : null,
-            'access_token_preview' => $accessToken ? substr($accessToken, 0, 30) . '...' : null,
-            'has_waba_id' => !!$wabaId,
-            'has_phone_number_id' => !!$phoneNumberId,
-            'redirect_uri' => $redirectUri,
+            'token_type' => $accessToken ? 'access_token' : 'authorization_code',
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
         ]);
 
-        // Check if already connected
-        if ($account->whatsappConnection) {
+        $existingConnection = $account->whatsappConnection;
+
+        // Only block when an active connection already exists.
+        if ($existingConnection && $existingConnection->isActive()) {
             \Log::warning('⚠️  Account already has WhatsApp connection', [
                 'account_id' => $account->id,
-                'existing_phone' => $account->whatsappConnection->phone_number,
+                'existing_phone' => $existingConnection->phone_number,
             ]);
             return response()->json([
                 'error' => [
@@ -107,42 +104,43 @@ class WhatsAppController extends Controller
         }
 
         try {
-            \Log::info('🔄 Starting authorization exchange with WhatsAppService');
-
-            // If waba_id and phone_number_id are provided directly with access_token,
-            // use the access_token to verify WABA access before storing
-            if ($accessToken && $wabaId && $phoneNumberId) {
-                \Log::info('📋 WABA info provided directly, verifying access with user token');
-                $wabaData = $this->whatsAppService->verifyAndFetchWabaInfo(
-                    $accessToken,
-                    $wabaId,
-                    $phoneNumberId
-                );
-            } elseif ($accessToken) {
-                // Only access_token provided, fetch WABA info using it
-                $wabaData = $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken);
-            } else {
-                // Authorization code provided, exchange for token first
-                $wabaData = $this->whatsAppService->exchangeCodeForWabaInfo(
-                    $code,
-                    $isInputToken,
-                    $redirectUri
-                );
+            // If code is provided, exchange it for an access token first
+            if ($code) {
+                \Log::info('🔄 Exchanging code for access token');
+                $accessToken = $this->whatsAppService->exchangeCodeForAccessToken($code);
             }
 
-            \Log::info('✅ Authorization exchange successful, creating WhatsappConnection', [
+            // Trust waba_id and phone_number_id from Embedded Signup,
+            // just fetch the display phone number
+            \Log::info('📋 Processing Embedded Signup result');
+            $wabaData = $this->whatsAppService->processEmbeddedSignup(
+                $accessToken,
+                $wabaId,
+                $phoneNumberId
+            );
+
+            \Log::info('✅ Embedded Signup processed, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],
                 'phone_number' => $wabaData['phone_number'],
             ]);
 
-            // Create the connection
-            $connection = WhatsappConnection::create([
-                'account_id' => $account->id,
+            $connectionPayload = [
                 'waba_id' => $wabaData['waba_id'],
                 'phone_number_id' => $wabaData['phone_number_id'],
                 'phone_number' => $wabaData['phone_number'],
                 'status' => WhatsappConnection::STATUS_ACTIVE,
-            ]);
+            ];
+
+            // Re-activate an existing disconnected row so reconnect works.
+            if ($existingConnection) {
+                $existingConnection->update($connectionPayload);
+                $connection = $existingConnection->fresh();
+            } else {
+                $connection = WhatsappConnection::create([
+                    'account_id' => $account->id,
+                    ...$connectionPayload,
+                ]);
+            }
 
             \Log::info('✅ WhatsappConnection record created', [
                 'connection_id' => $connection->id,
