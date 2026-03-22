@@ -162,13 +162,20 @@ const WhatsApp: React.FC = () => {
             return;
           }
 
-          const code = response.authResponse.code || '';
           const accessToken = response.authResponse.accessToken || '';
+          const code = response.authResponse.code || '';
 
-          console.log('Has code:', !!code);
           console.log('Has accessToken:', !!accessToken);
+          console.log('Has code:', !!code);
           console.log('Captured waba_id:', capturedWabaId.current);
           console.log('Captured phone_number_id:', capturedPhoneNumberId.current);
+
+          if (!accessToken && !code) {
+            setConnecting(false);
+            setNotice('');
+            setError('No access token or code received from Meta. Please try again.');
+            return;
+          }
 
           if (!capturedWabaId.current || !capturedPhoneNumberId.current) {
             setConnecting(false);
@@ -178,9 +185,10 @@ const WhatsApp: React.FC = () => {
           }
 
           console.log('📤 Sending to /whatsapp/connect...');
+          // Prefer access_token over code to avoid redirect_uri exchange issues
           api.post('/whatsapp/connect', {
-            code: code || undefined,
             access_token: accessToken || undefined,
+            code: (!accessToken && code) ? code : undefined,
             waba_id: capturedWabaId.current,
             phone_number_id: capturedPhoneNumberId.current,
           })
@@ -200,7 +208,7 @@ const WhatsApp: React.FC = () => {
         {
           config_id: currentConfig.config_id,
           response_type: 'code',
-          override_default_response_type: true,
+          override_default_response_type: false,
           extras: {
             setup: {},
             featureType: '',
