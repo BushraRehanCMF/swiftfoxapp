@@ -98,6 +98,110 @@ class WhatsAppService
     }
 
     /**
+     * Exchange an authorization code for an access token only (no WABA lookup).
+     *
+     * @throws \Exception
+     */
+    public function exchangeCodeForAccessToken(string $code, ?string $redirectUriOverride = null): string
+    {
+        $appId = config('swiftfox.whatsapp.app_id');
+        $appSecret = config('swiftfox.whatsapp.app_secret');
+
+        if (!$appId || !$appSecret) {
+            throw new \Exception('Missing WHATSAPP_APP_ID or WHATSAPP_APP_SECRET configuration.');
+        }
+
+        $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
+        $redirectUri = $redirectUriOverride
+            ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
+
+        Log::info('📤 Exchanging code for access token', [
+            'redirect_uri' => $redirectUri,
+        ]);
+
+        $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', [
+            'client_id' => $appId,
+            'client_secret' => $appSecret,
+            'code' => $code,
+            'grant_type' => 'authorization_code',
+            'redirect_uri' => $redirectUri,
+        ]);
+
+        if (!$tokenResponse->successful()) {
+            $errorData = $tokenResponse->json();
+            throw new \Exception('Failed to exchange code: ' . ($errorData['error']['message'] ?? $errorData['error'] ?? 'Unknown error'));
+        }
+
+        $accessToken = $tokenResponse->json()['access_token'] ?? null;
+        if (!$accessToken) {
+            throw new \Exception('No access token returned from Meta.');
+        }
+
+        return $accessToken;
+    }
+
+    /**
+     * Process Embedded Signup result using session info (waba_id, phone_number_id) directly.
+     * This avoids calling /me/businesses which requires business_management permission.
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
+     * @throws \Exception
+     */
+    public function processEmbeddedSignup(string $accessToken, string $wabaId, string $phoneNumberId): array
+    {
+        Log::info('📤 Processing Embedded Signup with session info', [
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        // Fetch the display phone number for this phone_number_id
+        $phoneResponse = Http::withToken($accessToken)->get(
+            "{$this->apiUrl}/v22.0/{$phoneNumberId}",
+            ['fields' => 'display_phone_number,verified_name']
+        );
+
+        $displayPhoneNumber = $phoneNumberId; // fallback
+        if ($phoneResponse->successful()) {
+            $phoneData = $phoneResponse->json();
+            $displayPhoneNumber = $phoneData['display_phone_number'] ?? $phoneNumberId;
+            Log::info('✅ Phone number details fetched', [
+                'display_phone_number' => $displayPhoneNumber,
+                'verified_name' => $phoneData['verified_name'] ?? null,
+            ]);
+        } else {
+            Log::warning('⚠️ Could not fetch phone number details, using ID as fallback', [
+                'status' => $phoneResponse->status(),
+                'error' => $phoneResponse->json()['error']['message'] ?? 'Unknown',
+            ]);
+        }
+
+        Log::info('✅ Embedded Signup processed successfully', [
+            'waba_id' => $wabaId,
+            'phone_number' => $displayPhoneNumber,
+        ]);
+
+        return [
+            'waba_id' => $wabaId,
+            'phone_number_id' => $phoneNumberId,
+            'phone_number' => $displayPhoneNumber,
+            'access_token' => $accessToken,
+        ];
+    }
+
+    /**
+     * Process Embedded Signup with an authorization code + session info.
+     * Exchanges the code first, then uses session info directly.
+     *
+     * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
+     * @throws \Exception
+     */
+    public function processEmbeddedSignupWithCode(string $code, string $wabaId, string $phoneNumberId, ?string $redirectUri = null): array
+    {
+        $accessToken = $this->exchangeCodeForAccessToken($code, $redirectUri);
+        return $this->processEmbeddedSignup($accessToken, $wabaId, $phoneNumberId);
+    }
+
+    /**
      * Exchange authorization code/input_token from Meta Embedded Signup for WABA info.
      *
      * For Embedded Signup:

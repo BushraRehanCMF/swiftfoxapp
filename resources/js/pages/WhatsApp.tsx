@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../services/api';
 
 type ConnectionStatus = {
@@ -18,7 +18,7 @@ type EmbeddedConfig = {
 declare global {
   interface Window {
     FB?: {
-      init: (options: { appId: string; xfbml?: boolean; version: string }) => void;
+      init: (options: { appId: string; autoLogAppEvents?: boolean; xfbml?: boolean; version: string }) => void;
       login: (callback: (response: any) => void, options: Record<string, unknown>) => void;
     };
     fbAsyncInit?: () => void;
@@ -32,6 +32,10 @@ const WhatsApp: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [config, setConfig] = useState<EmbeddedConfig | null>(null);
+
+  // Refs to capture session info from Embedded Signup postMessage events
+  const capturedWabaId = useRef<string | null>(null);
+  const capturedPhoneNumberId = useRef<string | null>(null);
 
   const hasConfig = useMemo(() => Boolean(config?.app_id && config?.config_id), [config]);
 
@@ -62,7 +66,7 @@ const WhatsApp: React.FC = () => {
   const ensureFacebookSdk = (appId: string) =>
     new Promise<void>((resolve, reject) => {
       if (window.FB) {
-        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+        window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version: 'v22.0' });
         resolve();
         return;
       }
@@ -72,14 +76,14 @@ const WhatsApp: React.FC = () => {
         const checkReady = window.setInterval(() => {
           if (window.FB) {
             window.clearInterval(checkReady);
-            window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+            window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version: 'v22.0' });
             resolve();
           }
         }, 50);
         window.setTimeout(() => {
           window.clearInterval(checkReady);
           reject(new Error('Facebook SDK failed to load.'));
-        }, 5000);
+        }, 10000);
         return;
       }
 
@@ -88,7 +92,7 @@ const WhatsApp: React.FC = () => {
           reject(new Error('Facebook SDK failed to initialize.'));
           return;
         }
-        window.FB.init({ appId, xfbml: false, version: 'v18.0' });
+        window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version: 'v22.0' });
         resolve();
       };
 
@@ -100,6 +104,25 @@ const WhatsApp: React.FC = () => {
       script.onerror = () => reject(new Error('Facebook SDK failed to load.'));
       document.body.appendChild(script);
     });
+
+  // Listen for WA_EMBEDDED_SIGNUP postMessage events from Facebook
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          console.log('📩 WA_EMBEDDED_SIGNUP event received', data.data);
+          capturedWabaId.current = data.data?.waba_id || null;
+          capturedPhoneNumberId.current = data.data?.phone_number_id || null;
+        }
+      } catch {
+        // Not a JSON message, ignore
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const startEmbeddedSignup = async () => {
     setError('');
@@ -114,85 +137,76 @@ const WhatsApp: React.FC = () => {
     }
 
     try {
-      const redirectUri = window.location.href.split('#')[0].split('?')[0];
-      const params = new URLSearchParams({
-        client_id: currentConfig.app_id,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        scope: 'whatsapp_business_messaging,business_management,whatsapp_business_management',
-        display: 'popup',
-        config_id: currentConfig.config_id,
-      });
+      await ensureFacebookSdk(currentConfig.app_id);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load Facebook SDK.');
+      setConnecting(false);
+      return;
+    }
 
-      const oauthUrl = `https://www.facebook.com/v22.0/dialog/oauth?${params.toString()}`;
+    // Reset captured session info
+    capturedWabaId.current = null;
+    capturedPhoneNumberId.current = null;
 
-      console.log('Opening OAuth dialog:', oauthUrl);
-      console.log('Redirect URI:', redirectUri);
+    setNotice('Completing signup in the popup window...');
 
-      const popup = window.open(oauthUrl, 'wa_oauth', 'width=650,height=720');
-      if (!popup) {
-        setError('Popup blocked. Please allow popups and try again.');
-        setConnecting(false);
-        return;
-      }
+    try {
+      window.FB!.login(
+        async (response: any) => {
+          console.log('FB.login callback received', response);
 
-      setNotice('Completing signup in the popup window...');
-
-      const poll = window.setInterval(async () => {
-        try {
-          if (popup.closed) {
-            window.clearInterval(poll);
+          if (!response.authResponse) {
             setConnecting(false);
             setNotice('');
-            setError('Popup closed before completion.');
+            setError('Login cancelled or failed.');
             return;
           }
 
-          const popupUrl = popup.location.href;
-          if (popupUrl && popupUrl.startsWith(window.location.origin)) {
-            const urlObj = new URL(popupUrl);
-            const code = urlObj.searchParams.get('code');
-            const error = urlObj.searchParams.get('error');
-            window.clearInterval(poll);
-            popup.close();
+          const code = response.authResponse.code || '';
+          const accessToken = response.authResponse.accessToken || '';
 
-            if (error) {
-              setConnecting(false);
-              setError(`OAuth error: ${error}`);
-              return;
-            }
+          console.log('Has code:', !!code);
+          console.log('Has accessToken:', !!accessToken);
+          console.log('Captured waba_id:', capturedWabaId.current);
+          console.log('Captured phone_number_id:', capturedPhoneNumberId.current);
 
-            if (!code) {
-              setConnecting(false);
-              setError('Login failed. No authorization code received.');
-              return;
-            }
-
-            console.log('✅ Authorization code received');
-
-            try {
-              console.log('📤 Sending authorization code to /whatsapp/connect...');
-              const connectResponse = await api.post('/whatsapp/connect', {
-                code,
-                redirect_uri: redirectUri,
-              });
-
-              console.log('✅ WhatsApp connection successful:', connectResponse.data);
-              setNotice('WhatsApp connected successfully!');
-              await fetchStatus();
-            } catch (err: any) {
-              console.error('❌ Connection failed:', err.response?.data || err.message);
-              setError(
-                err.response?.data?.error?.message || 'Failed to connect WhatsApp.'
-              );
-            } finally {
-              setConnecting(false);
-            }
+          if (!capturedWabaId.current || !capturedPhoneNumberId.current) {
+            setConnecting(false);
+            setNotice('');
+            setError('Embedded Signup did not return WABA or phone number info. Please try again.');
+            return;
           }
-        } catch (err) {
-          // wait for redirect to same origin
+
+          try {
+            console.log('📤 Sending to /whatsapp/connect...');
+            const connectResponse = await api.post('/whatsapp/connect', {
+              code: code || undefined,
+              access_token: accessToken || undefined,
+              waba_id: capturedWabaId.current,
+              phone_number_id: capturedPhoneNumberId.current,
+            });
+
+            console.log('✅ WhatsApp connection successful:', connectResponse.data);
+            setNotice('WhatsApp connected successfully!');
+            await fetchStatus();
+          } catch (err: any) {
+            console.error('❌ Connection failed:', err.response?.data || err.message);
+            setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
+          } finally {
+            setConnecting(false);
+          }
+        },
+        {
+          config_id: currentConfig.config_id,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: '',
+            sessionInfoVersion: '3',
+          },
         }
-      }, 500);
+      );
     } catch (err: any) {
       setError(err.message || 'Unable to start Embedded Signup.');
       setConnecting(false);
