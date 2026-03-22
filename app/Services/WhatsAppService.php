@@ -149,8 +149,56 @@ class WhatsAppService
     }
 
     /**
+     * Exchange a short-lived user access token for a long-lived one (60 days).
+     *
+     * @throws \Exception
+     */
+    public function exchangeForLongLivedToken(string $shortLivedToken): string
+    {
+        $appId = config('swiftfox.whatsapp.app_id');
+        $appSecret = config('swiftfox.whatsapp.app_secret');
+
+        if (!$appId || !$appSecret) {
+            throw new \Exception('Missing WHATSAPP_APP_ID or WHATSAPP_APP_SECRET configuration.');
+        }
+
+        Log::info('📤 Exchanging short-lived token for long-lived token');
+
+        $response = Http::get("{$this->apiUrl}/v22.0/oauth/access_token", [
+            'grant_type' => 'fb_exchange_token',
+            'client_id' => $appId,
+            'client_secret' => $appSecret,
+            'fb_exchange_token' => $shortLivedToken,
+        ]);
+
+        if (!$response->successful()) {
+            $errorData = $response->json();
+            Log::warning('⚠️ Long-lived token exchange failed, using short-lived token as fallback', [
+                'status' => $response->status(),
+                'error' => $errorData['error']['message'] ?? 'Unknown',
+            ]);
+            return $shortLivedToken;
+        }
+
+        $longLivedToken = $response->json()['access_token'] ?? null;
+        if (!$longLivedToken) {
+            Log::warning('⚠️ No long-lived token in response, using short-lived token as fallback');
+            return $shortLivedToken;
+        }
+
+        $expiresIn = $response->json()['expires_in'] ?? null;
+        Log::info('✅ Long-lived token obtained', [
+            'expires_in_seconds' => $expiresIn,
+            'expires_in_days' => $expiresIn ? round($expiresIn / 86400, 1) : null,
+        ]);
+
+        return $longLivedToken;
+    }
+
+    /**
      * Process Embedded Signup result using session info (waba_id, phone_number_id) directly.
      * This avoids calling /me/businesses which requires business_management permission.
+     * Automatically exchanges the short-lived token for a long-lived one (60 days).
      *
      * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
      * @throws \Exception
@@ -161,6 +209,9 @@ class WhatsAppService
             'waba_id' => $wabaId,
             'phone_number_id' => $phoneNumberId,
         ]);
+
+        // Exchange short-lived token for long-lived token (60 days)
+        $accessToken = $this->exchangeForLongLivedToken($accessToken);
 
         // Fetch the display phone number for this phone_number_id
         $phoneResponse = Http::withToken($accessToken)->get(
