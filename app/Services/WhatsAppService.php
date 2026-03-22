@@ -541,6 +541,10 @@ class WhatsAppService
     }
 
     /**
+     * Verify webhook signature from Meta.
+     */
+    public function verifyWebhookSignature(string $payload, string $signature): bool
+    {
         $appSecret = config('swiftfox.whatsapp.app_secret');
 
         if (!$appSecret) {
@@ -564,5 +568,104 @@ class WhatsAppService
         }
 
         return null;
+    }
+
+    /**
+     * List message templates for a WABA.
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getTemplates(WhatsappConnection $connection): array
+    {
+        $accessToken = $connection->access_token;
+        if (!$accessToken) {
+            throw new \Exception('No access token for this WhatsApp connection.');
+        }
+
+        $url = "{$this->apiUrl}/{$this->apiVersion}/{$connection->waba_id}/message_templates";
+
+        $response = Http::withToken($accessToken)->get($url, [
+            'fields' => 'name,status,language,category,components',
+            'limit' => 100,
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Failed to fetch WhatsApp templates', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+            throw new \Exception('Failed to fetch templates: ' . ($response->json()['error']['message'] ?? 'Unknown error'));
+        }
+
+        return $response->json()['data'] ?? [];
+    }
+
+    /**
+     * Send a template message via WhatsApp Cloud API.
+     *
+     * @return array{message_id: string}
+     * @throws \Exception
+     */
+    public function sendTemplateMessage(
+        string $phoneNumber,
+        string $templateName,
+        string $languageCode,
+        array $components = [],
+        ?WhatsappConnection $connection = null
+    ): array {
+        if (!$connection) {
+            $connection = $this->getConnectionForCurrentAccount();
+        }
+
+        if (!$connection) {
+            throw new \Exception('No WhatsApp connection found.');
+        }
+
+        $accessToken = $connection->access_token;
+        if (!$accessToken) {
+            throw new \Exception('No access token stored for this WhatsApp connection.');
+        }
+
+        $url = "{$this->apiUrl}/{$this->apiVersion}/{$connection->phone_number_id}/messages";
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $this->formatPhoneNumber($phoneNumber),
+            'type' => 'template',
+            'template' => [
+                'name' => $templateName,
+                'language' => [
+                    'code' => $languageCode,
+                ],
+            ],
+        ];
+
+        if (!empty($components)) {
+            $payload['template']['components'] = $components;
+        }
+
+        Log::info('Sending template message', [
+            'to' => $this->formatPhoneNumber($phoneNumber),
+            'template' => $templateName,
+            'language' => $languageCode,
+        ]);
+
+        $response = Http::withToken($accessToken)->post($url, $payload);
+
+        if (!$response->successful()) {
+            Log::error('WhatsApp template API error', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+            throw new \Exception('Failed to send template message: ' . ($response->json()['error']['message'] ?? 'Unknown error'));
+        }
+
+        $data = $response->json();
+
+        return [
+            'message_id' => $data['messages'][0]['id'] ?? null,
+        ];
     }
 }

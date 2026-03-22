@@ -137,6 +137,8 @@ Route::prefix('v1')->group(function () {
                 Route::get('/config', [WhatsAppController::class, 'config']);
                 Route::post('/connect', [WhatsAppController::class, 'connect']);
                 Route::post('/disconnect', [WhatsAppController::class, 'disconnect']);
+                Route::get('/templates', [WhatsAppController::class, 'templates']);
+                Route::post('/send-template', [WhatsAppController::class, 'sendTemplate']);
             });
 
             /*
