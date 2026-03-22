@@ -37,6 +37,10 @@ class SendWhatsAppMessage implements ShouldQueue
      */
     public function handle(WhatsAppService $whatsAppService): void
     {
+        Log::info('📤 SendWhatsAppMessage job v2 starting', [
+            'message_id' => $this->message->id,
+        ]);
+
         try {
             $conversation = $this->message->conversation;
             $contact = $conversation->contact;
@@ -44,6 +48,13 @@ class SendWhatsAppMessage implements ShouldQueue
             // Get the WhatsApp connection from the conversation's account
             // (auth()->user() is not available in queue jobs)
             $connection = $conversation->account->whatsappConnection;
+
+            Log::info('📋 Job context', [
+                'conversation_id' => $conversation->id,
+                'account_id' => $conversation->account_id,
+                'has_connection' => (bool) $connection,
+                'contact_phone' => $contact->phone_number,
+            ]);
 
             // Send via WhatsApp API
             $result = $whatsAppService->sendTextMessage(
