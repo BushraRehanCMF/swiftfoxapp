@@ -102,7 +102,7 @@ class WhatsAppService
      *
      * @throws \Exception
      */
-    public function exchangeCodeForAccessToken(string $code, ?string $redirectUriOverride = null): string
+    public function exchangeCodeForAccessToken(string $code, ?string $redirectUriOverride = null, bool $fromFbLogin = false): string
     {
         $appId = config('swiftfox.whatsapp.app_id');
         $appSecret = config('swiftfox.whatsapp.app_secret');
@@ -111,21 +111,29 @@ class WhatsAppService
             throw new \Exception('Missing WHATSAPP_APP_ID or WHATSAPP_APP_SECRET configuration.');
         }
 
-        $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
-        $redirectUri = $redirectUriOverride
-            ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
-
-        Log::info('📤 Exchanging code for access token', [
-            'redirect_uri' => $redirectUri,
-        ]);
-
-        $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', [
+        $params = [
             'client_id' => $appId,
             'client_secret' => $appSecret,
             'code' => $code,
             'grant_type' => 'authorization_code',
-            'redirect_uri' => $redirectUri,
+        ];
+
+        // When code comes from FB.login() (Embedded Signup), do NOT send redirect_uri.
+        // FB.login() codes are not tied to a redirect_uri and Meta will reject the mismatch.
+        // Only include redirect_uri for traditional OAuth redirect flows.
+        if (!$fromFbLogin) {
+            $configuredRedirectUri = config('swiftfox.whatsapp.redirect_uri');
+            $redirectUri = $redirectUriOverride
+                ?: ($configuredRedirectUri ?: rtrim(config('app.url'), '/') . '/whatsapp');
+            $params['redirect_uri'] = $redirectUri;
+        }
+
+        Log::info('📤 Exchanging code for access token', [
+            'from_fb_login' => $fromFbLogin,
+            'has_redirect_uri' => isset($params['redirect_uri']),
         ]);
+
+        $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v22.0/oauth/access_token', $params);
 
         if (!$tokenResponse->successful()) {
             $errorData = $tokenResponse->json();
@@ -197,7 +205,8 @@ class WhatsAppService
      */
     public function processEmbeddedSignupWithCode(string $code, string $wabaId, string $phoneNumberId, ?string $redirectUri = null): array
     {
-        $accessToken = $this->exchangeCodeForAccessToken($code, $redirectUri);
+        // Code from FB.login() Embedded Signup - no redirect_uri needed
+        $accessToken = $this->exchangeCodeForAccessToken($code, $redirectUri, fromFbLogin: true);
         return $this->processEmbeddedSignup($accessToken, $wabaId, $phoneNumberId);
     }
 
