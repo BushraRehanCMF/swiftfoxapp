@@ -152,7 +152,7 @@ const WhatsApp: React.FC = () => {
 
     try {
       window.FB!.login(
-        async (response: any) => {
+        (response: any) => {
           console.log('FB.login callback received', response);
 
           if (!response.authResponse) {
@@ -177,24 +177,25 @@ const WhatsApp: React.FC = () => {
             return;
           }
 
-          try {
-            console.log('📤 Sending to /whatsapp/connect...');
-            const connectResponse = await api.post('/whatsapp/connect', {
-              code: code || undefined,
-              access_token: accessToken || undefined,
-              waba_id: capturedWabaId.current,
-              phone_number_id: capturedPhoneNumberId.current,
+          console.log('📤 Sending to /whatsapp/connect...');
+          api.post('/whatsapp/connect', {
+            code: code || undefined,
+            access_token: accessToken || undefined,
+            waba_id: capturedWabaId.current,
+            phone_number_id: capturedPhoneNumberId.current,
+          })
+            .then((connectResponse: any) => {
+              console.log('✅ WhatsApp connection successful:', connectResponse.data);
+              setNotice('WhatsApp connected successfully!');
+              fetchStatus();
+            })
+            .catch((err: any) => {
+              console.error('❌ Connection failed:', err.response?.data || err.message);
+              setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
+            })
+            .finally(() => {
+              setConnecting(false);
             });
-
-            console.log('✅ WhatsApp connection successful:', connectResponse.data);
-            setNotice('WhatsApp connected successfully!');
-            await fetchStatus();
-          } catch (err: any) {
-            console.error('❌ Connection failed:', err.response?.data || err.message);
-            setError(err.response?.data?.error?.message || 'Failed to connect WhatsApp.');
-          } finally {
-            setConnecting(false);
-          }
         },
         {
           config_id: currentConfig.config_id,
