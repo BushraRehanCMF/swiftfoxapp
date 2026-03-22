@@ -180,7 +180,22 @@ const Inbox: React.FC = () => {
                   onClick={() => setSelectedId(conversation.id)}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{contactName}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900 truncate">{contactName}</span>
+                      {/* Show label color badges */}
+                      {conversation.labels && conversation.labels.length > 0 && (
+                        <span className="flex gap-1">
+                          {conversation.labels.map((label) => (
+                            <span
+                              key={label.id}
+                              className="inline-block h-3 w-3 rounded-full border border-white shadow"
+                              style={{ backgroundColor: label.color || '#059669' }}
+                              title={label.name}
+                            />
+                          ))}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-400">
                       {formatTimestamp(conversation.last_message_at)}
                     </div>
