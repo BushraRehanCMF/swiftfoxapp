@@ -223,4 +223,84 @@ class WhatsAppController extends Controller
             ],
         ]);
     }
+
+    /**
+     * List message templates for the account's WABA.
+     */
+    public function templates(Request $request): JsonResponse
+    {
+        $account = $request->user()->account;
+        $connection = $account->whatsappConnection;
+
+        if (!$connection || !$connection->isActive()) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NOT_CONNECTED',
+                    'message' => 'No active WhatsApp connection.',
+                ],
+            ], 404);
+        }
+
+        try {
+            $templates = $this->whatsAppService->getTemplates($connection);
+
+            return response()->json([
+                'data' => $templates,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => [
+                    'code' => 'FETCH_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 400);
+        }
+    }
+
+    /**
+     * Send a template message to a phone number.
+     */
+    public function sendTemplate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'phone_number' => ['required', 'string'],
+            'template_name' => ['required', 'string'],
+            'language_code' => ['required', 'string'],
+            'components' => ['sometimes', 'array'],
+        ]);
+
+        $account = $request->user()->account;
+        $connection = $account->whatsappConnection;
+
+        if (!$connection || !$connection->isActive()) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NOT_CONNECTED',
+                    'message' => 'No active WhatsApp connection.',
+                ],
+            ], 404);
+        }
+
+        try {
+            $result = $this->whatsAppService->sendTemplateMessage(
+                $validated['phone_number'],
+                $validated['template_name'],
+                $validated['language_code'],
+                $validated['components'] ?? [],
+                $connection
+            );
+
+            return response()->json([
+                'data' => $result,
+                'message' => 'Template message sent successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => [
+                    'code' => 'SEND_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 400);
+        }
+    }
 }
