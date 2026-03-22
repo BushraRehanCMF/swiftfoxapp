@@ -196,9 +196,17 @@ class WhatsAppService
     }
 
     /**
+     * Get the System User access token from config.
+     * This is a permanent token that never expires.
+     */
+    protected function getSystemUserToken(): ?string
+    {
+        return config('swiftfox.whatsapp.access_token');
+    }
+
+    /**
      * Process Embedded Signup result using session info (waba_id, phone_number_id) directly.
-     * This avoids calling /me/businesses which requires business_management permission.
-     * Automatically exchanges the short-lived token for a long-lived one (60 days).
+     * Uses the System User token (permanent, from .env) instead of the user's short-lived token.
      *
      * @return array{waba_id: string, phone_number_id: string, phone_number: string, access_token: string}
      * @throws \Exception
@@ -210,8 +218,17 @@ class WhatsAppService
             'phone_number_id' => $phoneNumberId,
         ]);
 
-        // Exchange short-lived token for long-lived token (60 days)
-        $accessToken = $this->exchangeForLongLivedToken($accessToken);
+        // Use the permanent System User token instead of the short-lived user token.
+        // The System User token never expires and has full access to all shared WABAs.
+        $systemUserToken = $this->getSystemUserToken();
+        if ($systemUserToken) {
+            Log::info('✅ Using System User token (permanent) instead of user token');
+            $accessToken = $systemUserToken;
+        } else {
+            // Fallback: exchange short-lived token for long-lived token (60 days)
+            Log::warning('⚠️ No System User token configured, falling back to long-lived token exchange');
+            $accessToken = $this->exchangeForLongLivedToken($accessToken);
+        }
 
         // Fetch the display phone number for this phone_number_id
         $phoneResponse = Http::withToken($accessToken)->get(
