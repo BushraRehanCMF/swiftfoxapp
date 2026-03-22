@@ -24,6 +24,7 @@ type Conversation = {
   contact?: Contact | null;
   last_message?: Message | null;
   messages?: Message[];
+  labels?: { id: number | string; name: string; color: string }[];
 };
 
 type ApiCollection<T> = {
@@ -197,10 +198,27 @@ const Inbox: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-gray-500">Conversation</div>
-              <div className="text-lg font-semibold text-gray-900">
-                {selectedConversation?.contact?.name ||
-                  selectedConversation?.contact?.phone_number ||
-                  'Select a conversation'}
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-semibold text-gray-900">
+                  {selectedConversation?.contact?.name ||
+                    selectedConversation?.contact?.phone_number ||
+                    'Select a conversation'}
+                </span>
+                {/* Render conversation labels as badges */}
+                {selectedConversation?.labels && selectedConversation.labels.length > 0 && (
+                  <div className="flex gap-1">
+                    {selectedConversation.labels.map((label) => (
+                      <span
+                        key={label.id}
+                        className="inline-block rounded px-2 py-0.5 text-xs font-medium text-white"
+                        style={{ backgroundColor: label.color || '#059669' }}
+                        title={label.name}
+                      >
+                        {label.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             {selectedConversation && (
