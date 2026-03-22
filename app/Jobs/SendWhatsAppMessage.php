@@ -41,10 +41,15 @@ class SendWhatsAppMessage implements ShouldQueue
             $conversation = $this->message->conversation;
             $contact = $conversation->contact;
 
+            // Get the WhatsApp connection from the conversation's account
+            // (auth()->user() is not available in queue jobs)
+            $connection = $conversation->account->whatsappConnection;
+
             // Send via WhatsApp API
             $result = $whatsAppService->sendTextMessage(
                 $contact->phone_number,
-                $this->message->content
+                $this->message->content,
+                $connection
             );
 
             // Update message with WhatsApp message ID
