@@ -46,14 +46,25 @@ class WhatsAppWebhookController extends Controller
      */
     public function handle(Request $request): JsonResponse
     {
+        Log::info('📥 WhatsApp webhook received', [
+            'ip' => $request->ip(),
+            'content_length' => strlen($request->getContent()),
+            'has_signature' => $request->hasHeader('X-Hub-Signature-256'),
+        ]);
+
         // Verify signature
         $signature = $request->header('X-Hub-Signature-256', '');
         $payload = $request->getContent();
 
         if (!$this->whatsAppService->verifyWebhookSignature($payload, $signature)) {
-            Log::warning('WhatsApp webhook signature verification failed');
+            Log::warning('WhatsApp webhook signature verification failed', [
+                'signature_preview' => substr($signature, 0, 20),
+                'has_app_secret' => !empty(config('swiftfox.whatsapp.app_secret')),
+            ]);
             return response()->json(['status' => 'error'], 401);
         }
+
+        Log::info('✅ WhatsApp webhook signature verified');
 
         $data = $request->all();
 
@@ -76,6 +87,11 @@ class WhatsAppWebhookController extends Controller
      */
     protected function processWebhook(array $data): void
     {
+        Log::info('📋 Processing webhook data', [
+            'has_entry' => isset($data['entry']),
+            'entry_count' => count($data['entry'] ?? []),
+        ]);
+
         // Check if this is a WhatsApp Business Account webhook
         if (!isset($data['entry'])) {
             return;
