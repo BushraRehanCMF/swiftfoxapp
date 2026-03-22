@@ -62,6 +62,8 @@ class WhatsAppController extends Controller
             'access_token' => ['sometimes', 'nullable', 'string'],
             'is_input_token' => ['sometimes', 'boolean'],
             'redirect_uri' => ['sometimes', 'nullable', 'string'],
+            'waba_id' => ['sometimes', 'nullable', 'string'],
+            'phone_number_id' => ['sometimes', 'nullable', 'string'],
         ]);
 
         if (empty($validated['code']) && empty($validated['access_token'])) {
@@ -78,6 +80,8 @@ class WhatsAppController extends Controller
         $accessToken = $validated['access_token'] ?? null;
         $isInputToken = $validated['is_input_token'] ?? false;
         $redirectUri = $validated['redirect_uri'] ?? null;
+        $wabaId = $validated['waba_id'] ?? null;
+        $phoneNumberId = $validated['phone_number_id'] ?? null;
 
         \Log::info('✅ Request validated', [
             'token_type' => $accessToken ? 'access_token' : ($isInputToken ? 'input_token (JWT)' : 'authorization_code'),
@@ -104,14 +108,28 @@ class WhatsAppController extends Controller
 
         try {
             \Log::info('🔄 Starting authorization exchange with WhatsAppService');
-            // Exchange authorization code/input_token for WABA information
-            $wabaData = $accessToken
-                ? $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken)
-                : $this->whatsAppService->exchangeCodeForWabaInfo(
-                    $code,
-                    $isInputToken,
-                    $redirectUri
-                );
+
+            // If waba_id and phone_number_id were provided from Embedded Signup session info,
+            // use the direct approach (exchange code for token, then use session info directly)
+            if ($wabaId && $phoneNumberId) {
+                \Log::info('📩 Using Embedded Signup session info', [
+                    'waba_id' => $wabaId,
+                    'phone_number_id' => $phoneNumberId,
+                ]);
+
+                $wabaData = $accessToken
+                    ? $this->whatsAppService->processEmbeddedSignup($accessToken, $wabaId, $phoneNumberId)
+                    : $this->whatsAppService->processEmbeddedSignupWithCode($code, $wabaId, $phoneNumberId, $redirectUri);
+            } else {
+                // Fallback: try to discover WABA info from Graph API (may fail without business_management)
+                $wabaData = $accessToken
+                    ? $this->whatsAppService->exchangeAccessTokenForWabaInfo($accessToken)
+                    : $this->whatsAppService->exchangeCodeForWabaInfo(
+                        $code,
+                        $isInputToken,
+                        $redirectUri
+                    );
+            }
 
             \Log::info('✅ Authorization exchange successful, creating WhatsappConnection', [
                 'waba_id' => $wabaData['waba_id'],
