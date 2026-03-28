@@ -258,6 +258,84 @@ class WhatsAppController extends Controller
     }
 
     /**
+     * Create a message template.
+     */
+    public function createTemplate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'regex:/^[a-z0-9_]+$/'],
+            'language' => ['required', 'string'],
+            'category' => ['required', 'string', 'in:MARKETING,UTILITY,AUTHENTICATION'],
+            'components' => ['required', 'array'],
+        ]);
+
+        $account = $request->user()->account;
+        $connection = $account->whatsappConnection;
+
+        if (!$connection || !$connection->isActive()) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NOT_CONNECTED',
+                    'message' => 'No active WhatsApp connection.',
+                ],
+            ], 404);
+        }
+
+        try {
+            $result = $this->whatsAppService->createTemplate($connection, $validated);
+
+            return response()->json([
+                'data' => $result,
+                'message' => 'Template created successfully. It will be reviewed by Meta.',
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => [
+                    'code' => 'CREATE_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 400);
+        }
+    }
+
+    /**
+     * Delete a message template.
+     */
+    public function deleteTemplate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string'],
+        ]);
+
+        $account = $request->user()->account;
+        $connection = $account->whatsappConnection;
+
+        if (!$connection || !$connection->isActive()) {
+            return response()->json([
+                'error' => [
+                    'code' => 'NOT_CONNECTED',
+                    'message' => 'No active WhatsApp connection.',
+                ],
+            ], 404);
+        }
+
+        try {
+            $this->whatsAppService->deleteTemplate($connection, $validated['name']);
+
+            return response()->json([
+                'message' => 'Template deleted successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => [
+                    'code' => 'DELETE_FAILED',
+                    'message' => $e->getMessage(),
+                ],
+            ], 400);
+        }
+    }
+
+    /**
      * Send a template message to a phone number.
      */
     public function sendTemplate(Request $request): JsonResponse

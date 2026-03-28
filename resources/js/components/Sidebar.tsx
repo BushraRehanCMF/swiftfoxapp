@@ -8,7 +8,8 @@ import {
   Clock,
   BarChart3,
   UserPlus,
-  MessageCircle
+  MessageCircle,
+  FileText
 } from 'lucide-react';
 import logo from '../assets/logo-white.png';
 
@@ -27,6 +28,7 @@ const Sidebar: React.FC = () => {
     { to: '/business-hours', label: 'Business Hours', icon: Clock },
     { to: '/usage', label: 'Usage', icon: BarChart3 },
     { to: '/team', label: 'Team', icon: UserPlus },
+    { to: '/templates', label: 'Templates', icon: FileText },
     { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
   ];
 

@@ -138,6 +138,8 @@ Route::prefix('v1')->group(function () {
                 Route::post('/connect', [WhatsAppController::class, 'connect']);
                 Route::post('/disconnect', [WhatsAppController::class, 'disconnect']);
                 Route::get('/templates', [WhatsAppController::class, 'templates']);
+                Route::post('/templates', [WhatsAppController::class, 'createTemplate']);
+                Route::delete('/templates', [WhatsAppController::class, 'deleteTemplate']);
                 Route::post('/send-template', [WhatsAppController::class, 'sendTemplate']);
             });
 

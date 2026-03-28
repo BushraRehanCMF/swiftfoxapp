@@ -15,6 +15,7 @@ import BusinessHours from './pages/BusinessHours';
 import Team from './pages/Team';
 import Inbox from './pages/Inbox';
 import Pricing from './pages/Pricing';
+import Templates from './pages/Templates';
 import { useAuth } from './stores/auth';
 
 const Protected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -48,6 +49,7 @@ const AppRouter: React.FC = () => (
                                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/whatsapp" element={<WhatsApp />} />
+                <Route path="/templates" element={<Templates />} />
               </Routes>
             </Layout>
           </Protected>

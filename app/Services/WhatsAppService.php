@@ -602,6 +602,80 @@ class WhatsAppService
     }
 
     /**
+     * Create a message template for a WABA.
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function createTemplate(WhatsappConnection $connection, array $templateData): array
+    {
+        $accessToken = $connection->access_token;
+        if (!$accessToken) {
+            throw new \Exception('No access token for this WhatsApp connection.');
+        }
+
+        $url = "{$this->apiUrl}/{$this->apiVersion}/{$connection->waba_id}/message_templates";
+
+        $payload = [
+            'name' => $templateData['name'],
+            'language' => $templateData['language'],
+            'category' => $templateData['category'],
+            'components' => $templateData['components'],
+        ];
+
+        if (!empty($templateData['allow_category_change'])) {
+            $payload['allow_category_change'] = true;
+        }
+
+        Log::info('Creating WhatsApp template', [
+            'waba_id' => $connection->waba_id,
+            'name' => $templateData['name'],
+            'category' => $templateData['category'],
+        ]);
+
+        $response = Http::withToken($accessToken)->post($url, $payload);
+
+        if (!$response->successful()) {
+            Log::error('Failed to create WhatsApp template', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+            throw new \Exception('Failed to create template: ' . ($response->json()['error']['message'] ?? 'Unknown error'));
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Delete a message template.
+     *
+     * @throws \Exception
+     */
+    public function deleteTemplate(WhatsappConnection $connection, string $templateName): array
+    {
+        $accessToken = $connection->access_token;
+        if (!$accessToken) {
+            throw new \Exception('No access token for this WhatsApp connection.');
+        }
+
+        $url = "{$this->apiUrl}/{$this->apiVersion}/{$connection->waba_id}/message_templates";
+
+        $response = Http::withToken($accessToken)->delete($url, [
+            'name' => $templateName,
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Failed to delete WhatsApp template', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+            throw new \Exception('Failed to delete template: ' . ($response->json()['error']['message'] ?? 'Unknown error'));
+        }
+
+        return $response->json();
+    }
+
+    /**
      * Send a template message via WhatsApp Cloud API.
      *
      * @return array{message_id: string}
