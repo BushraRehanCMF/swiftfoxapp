@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contact;
+use App\Models\Message;
 use App\Models\WhatsappConnection;
+use App\Services\ConversationService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +14,8 @@ use Illuminate\Http\Request;
 class WhatsAppController extends Controller
 {
     public function __construct(
-        protected WhatsAppService $whatsAppService
+        protected WhatsAppService $whatsAppService,
+        protected ConversationService $conversationService
     ) {}
 
     /**
@@ -337,6 +341,7 @@ class WhatsAppController extends Controller
 
     /**
      * Send a template message to a phone number.
+     * Creates a contact, conversation, and message record so it appears in the inbox.
      */
     public function sendTemplate(Request $request): JsonResponse
     {
@@ -360,6 +365,7 @@ class WhatsAppController extends Controller
         }
 
         try {
+            // Send via WhatsApp API
             $result = $this->whatsAppService->sendTemplateMessage(
                 $validated['phone_number'],
                 $validated['template_name'],
@@ -367,6 +373,40 @@ class WhatsAppController extends Controller
                 $validated['components'] ?? [],
                 $connection
             );
+
+            // Create contact if not exists
+            $phoneNumber = $validated['phone_number'];
+            if (!str_starts_with($phoneNumber, '+')) {
+                $phoneNumber = '+' . $phoneNumber;
+            }
+
+            $contact = Contact::firstOrCreate(
+                [
+                    'account_id' => $account->id,
+                    'phone_number' => $phoneNumber,
+                ],
+                [
+                    'name' => $phoneNumber,
+                ]
+            );
+
+            // Get or create conversation
+            $conversation = $this->conversationService->getOrCreateConversation($contact);
+
+            // Create message record
+            $message = Message::create([
+                'account_id' => $account->id,
+                'conversation_id' => $conversation->id,
+                'direction' => Message::DIRECTION_OUTBOUND,
+                'content' => "[Template: {$validated['template_name']}]",
+                'status' => Message::STATUS_SENT,
+                'whatsapp_message_id' => $result['message_id'] ?? null,
+            ]);
+
+            $conversation->update([
+                'last_message_at' => now(),
+                'conversation_started_at' => now(),
+            ]);
 
             return response()->json([
                 'data' => $result,
